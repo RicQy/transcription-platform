@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.cache/
+*.log
+uploads/
+__pycache__/
+.venv/
+.env
+*.pyc
+*.pyo
+.DS_Store
+coverage/
+.nyc_output/
+*.tsbuildinfo
+.turbo/
