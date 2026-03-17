@@ -122,7 +122,7 @@ Implement the Python microservice that runs Whisper + pyannote.
 - `pytest` tests: `merger.py` correctly assigns speaker IDs to words; `asr.py` loads model and returns expected output structure (mock faster-whisper); FastAPI endpoint returns 200 and triggers callback (mock httpx)
 - **Verification**: `cd services/asr-worker && pytest` passes; `uvicorn main:app` starts without errors
 
-### [ ] Step 7: Audio Upload UI & Dashboard
+### [x] Step 7: Audio Upload UI & Dashboard
 <!-- chat-id: fa22a2c8-911a-4b95-b813-46bd05186dac -->
 Build the frontend audio management screens.
 
@@ -133,7 +133,7 @@ Build the frontend audio management screens.
 - Vitest tests: DashboardPage renders audio list; status badge updates when Socket.io event fires; upload form validation rejects non-audio files
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 8: Transcript Editor — TipTap Core & Audio Sync
+### [x] Step 8: Transcript Editor — TipTap Core & Audio Sync
 Build the core editor with custom nodes and audio playback sync.
 
 - Create `apps/web/src/components/editor/extensions/TranscriptBlockNode.ts`: custom TipTap node wrapping a speaker segment (`speaker` attribute, renders as labeled block)
@@ -147,7 +147,7 @@ Build the core editor with custom nodes and audio playback sync.
 - Vitest tests: `TranscriptBlockNode` renders with speaker label; click on word node calls `wavesurfer.seekTo` with correct time; `useAutoSave` triggers save after 30 s
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 9: Transcript Editor — Tag Node, Keyboard Shortcuts & Auto-Save
+### [x] Step 9: Transcript Editor — Tag Node, Keyboard Shortcuts & Auto-Save
 Complete editor tooling.
 
 - Create `TagNode.ts`: inline TipTap node that renders `[inaudible]`, `[crosstalk]` etc. as visual chips; tag types loaded from active style guide's `TagUsage` rules
@@ -159,7 +159,7 @@ Complete editor tooling.
 - Vitest tests: TagPicker inserts correct TagNode; keyboard shortcut Space fires play/pause; speaker label reassignment updates block attribute
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 10: Style Guide Ingestion API
+### [x] Step 10: Style Guide Ingestion API
 Implement the PDF parsing and LLM rule extraction pipeline (spec section 3.3).
 
 - Create `apps/api/src/services/pdfParser.ts`: `pdf-parse` wrapper returning `{text: string, pages: {pageNumber: number, text: string}[]}`
@@ -170,7 +170,7 @@ Implement the PDF parsing and LLM rule extraction pipeline (spec section 3.3).
 - API integration tests: PDF upload creates guide + rules; Zod validates extracted rule shape; CRUD operations mutate rules; OpenAI client mocked
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 11: Style Guide Versioning & Activation
+### [x] Step 11: Style Guide Versioning & Activation
 Implement guide version management and re-validation trigger.
 
 - Implement `POST /api/style-guide/:id/activate`: sets `isActive=true` on selected guide (unsets all others), triggers `validationCodegen` for each rule, enqueues re-validation BullMQ jobs for all transcripts
@@ -180,7 +180,7 @@ Implement guide version management and re-validation trigger.
 - API integration tests: activation flips `isActive`; codegen called for each rule; re-validation job enqueued; re-validation worker stores errors; socket events emitted; all OpenAI + BullMQ mocked
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 12: Admin Style Guide UI
+### [x] Step 12: Admin Style Guide UI
 Build the admin-only style guide management pages.
 
 - Create `apps/web/src/api/styleGuide.ts`: react-query hooks for `uploadGuide`, `listGuides`, `listRules`, `activateGuide`, `addRule`, `updateRule`, `deleteRule`
@@ -192,7 +192,7 @@ Build the admin-only style guide management pages.
 - Vitest tests: StyleGuideListPage renders versions; activate button calls API; RuleEditorPage inline edit updates rule; upload form validates PDF mime type
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 13: Rule Validation in Editor
+### [x] Step 13: Rule Validation in Editor
 Wire LLM-generated validation functions into the TipTap editor.
 
 - Create `apps/web/src/components/editor/extensions/ValidationPlugin.ts`: TipTap plugin that reads `styleGuideStore.activeRules`, compiles each `validationLogic` string via `new Function()` inside try/catch, runs all `ValidationFn[]` debounced 500 ms on editor content change, produces `DecorationSet` with colored underlines per violation
@@ -204,7 +204,7 @@ Wire LLM-generated validation functions into the TipTap editor.
 - API integration tests: validate endpoint runs rules and returns errors; mark-resolved updates DB
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 14: AI Accuracy Review Panel
+### [x] Step 14: AI Accuracy Review Panel
 Implement the low-confidence word review workflow.
 
 - Create `ReviewSuggestionsPanel.tsx`: lists all words from `TranscriptSegment.wordData` where `confidence < 0.7`, sorted ascending; each item shows word, confidence %, timestamp; "Seek" button calls `wavesurfer.seekTo(start_time)`
@@ -214,7 +214,7 @@ Implement the low-confidence word review workflow.
 - API integration test: verify endpoint patches correct word in JSONB array
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 15: Export System
+### [x] Step 15: Export System
 Implement all four export formats server-side.
 
 - Create `apps/api/src/services/exportService.ts` with functions: `toTxt(transcript, activeRules)`, `toDocx(transcript, activeRules)`, `toJson(transcript)`, `toTranscribeMe(transcript, activeRules)`
@@ -225,7 +225,7 @@ Implement all four export formats server-side.
 - API integration tests: each format returns correct `Content-Type`; TXT output respects speaker format from mock active rules; JSON output includes `wordData`
 - **Verification**: `pnpm test` passes; `pnpm typecheck` passes
 
-### [ ] Step 16: Accessibility, Polish & NFR Verification
+### [x] Step 16: Accessibility, Polish & NFR Verification
 Finalize UI quality and non-functional requirements.
 
 - Audit all pages with axe-core (via `@axe-core/react`) and fix WCAG 2.1 AA violations: focus management, ARIA labels on icon buttons, color contrast

@@ -22,9 +22,6 @@ export function initIo(httpServer: HttpServer): SocketIOServer {
   return _io;
 }
 
-export function getIo(): SocketIOServer {
-  if (!_io) {
-    throw new Error('Socket.io not initialized. Call initIo() first.');
-  }
+export function getIo(): SocketIOServer | null {
   return _io;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -74,12 +74,12 @@ describe('AudioUploadPage', () => {
   });
 
   it('rejects non-audio files and shows error', async () => {
-    const user = userEvent.setup();
     renderUploadPage();
 
     const input = screen.getByTestId('file-input');
     const file = createFile('document.pdf', 'application/pdf');
-    await user.upload(input, file);
+    // Use fireEvent to bypass the accept attribute filter in jsdom
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -88,12 +88,11 @@ describe('AudioUploadPage', () => {
   });
 
   it('rejects text files and shows error', async () => {
-    const user = userEvent.setup();
     renderUploadPage();
 
     const input = screen.getByTestId('file-input');
     const file = createFile('notes.txt', 'text/plain');
-    await user.upload(input, file);
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/invalid file type/i);

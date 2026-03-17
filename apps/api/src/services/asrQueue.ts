@@ -7,18 +7,23 @@ export interface AsrJobData {
   audioPath: string;
 }
 
-export const redisConnection = {
-  url: env.REDIS_URL,
-  maxRetriesPerRequest: null as null,
-  enableReadyCheck: false,
-};
+export function getRedisConnection() {
+  const url = new URL(env.REDIS_URL);
+  return {
+    host: url.hostname,
+    port: parseInt(url.port || '6379', 10),
+    password: url.password || undefined,
+    maxRetriesPerRequest: null as null,
+    enableReadyCheck: false,
+  };
+}
 
 let _asrQueue: Queue | null = null;
 
 export function getAsrQueue(): Queue {
   if (!_asrQueue) {
     _asrQueue = new Queue('asr', {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },

@@ -38,9 +38,7 @@ router.post('/asr-complete', async (req: Request, res: Response, next: NextFunct
         data: { status: 'ERROR' },
       });
 
-      try {
-        getIo().emit('transcript:status', { audioId: audio_id, status: 'ERROR', progress: 0 });
-      } catch { /* socket may not be ready */ }
+      getIo()?.emit('transcript:status', { audioId: audio_id, status: 'ERROR', progress: 0 });
 
       res.json({ ok: true });
       return;
@@ -89,10 +87,8 @@ router.post('/asr-complete', async (req: Request, res: Response, next: NextFunct
 
     logger.info('ASR complete, transcript created', { audioId: audio_id, transcriptId: transcript.id });
 
-    try {
-      getIo().emit('transcript:status', { audioId: audio_id, status: 'COMPLETE', progress: 100 });
-      getIo().emit('transcript:ready', { transcriptId: transcript.id });
-    } catch { /* socket may not be ready */ }
+    getIo()?.emit('transcript:status', { audioId: audio_id, status: 'COMPLETE', progress: 100 });
+    getIo()?.emit('transcript:ready', { transcriptId: transcript.id });
 
     res.json({ ok: true, transcriptId: transcript.id });
   } catch (err) {

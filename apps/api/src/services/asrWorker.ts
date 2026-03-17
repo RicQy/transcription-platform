@@ -3,7 +3,7 @@ import axios from 'axios';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { logger } from '../utils/logger';
-import { redisConnection, AsrJobData } from './asrQueue';
+import { getRedisConnection, AsrJobData } from './asrQueue';
 import { getIo } from '../sockets/index';
 
 export function startAsrWorker(): Worker {
@@ -19,11 +19,7 @@ export function startAsrWorker(): Worker {
         data: { status: 'PROCESSING' },
       });
 
-      try {
-        getIo().emit('transcript:status', { audioId, status: 'PROCESSING', progress: 0 });
-      } catch {
-        /* socket may not be ready in tests */
-      }
+      getIo()?.emit('transcript:status', { audioId, status: 'PROCESSING', progress: 0 });
 
       await axios.post(`${env.ASR_WORKER_URL}/transcribe`, {
         audio_path: audioPath,
@@ -35,7 +31,7 @@ export function startAsrWorker(): Worker {
       logger.info('ASR worker HTTP request sent', { audioId });
     },
     {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       concurrency: 2,
     },
   );
@@ -50,11 +46,7 @@ export function startAsrWorker(): Worker {
       data: { status: 'ERROR' },
     }).catch(() => {});
 
-    try {
-      getIo().emit('transcript:status', { audioId, status: 'ERROR', progress: 0 });
-    } catch {
-      /* ignore */
-    }
+    getIo()?.emit('transcript:status', { audioId, status: 'ERROR', progress: 0 });
   });
 
   logger.info('ASR worker started');

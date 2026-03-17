@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AudioStatus } from '@transcribe/shared-types';
 import type { AudioFileDto } from '@transcribe/shared-types';
+import type { UseQueryResult } from '@tanstack/react-query';
 import DashboardPage from '../pages/DashboardPage';
 
 const mockSocket = {
@@ -39,6 +40,36 @@ const mockAudioFiles: AudioFileDto[] = [
   },
 ];
 
+function createMockQueryResult<T>(overrides: Partial<UseQueryResult<T>>): UseQueryResult<T> {
+  return {
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    isSuccess: false,
+    isPending: false,
+    isFetching: false,
+    refetch: vi.fn(),
+    fetchStatus: 'idle',
+    status: 'success',
+    error: null,
+    failureCount: 0,
+    failureReason: null,
+    errorUpdateCount: 0,
+    isInitialLoading: false,
+    isLoadingError: false,
+    isPaused: false,
+    isPlaceholderData: false,
+    isRefetchError: false,
+    isRefetching: false,
+    isStale: false,
+    ...overrides,
+  } as unknown as UseQueryResult<T>;
+}
+
+function createMockAudioQueryResult(overrides: Partial<UseQueryResult<AudioFileDto[]>>): UseQueryResult<AudioFileDto[]> {
+  return createMockQueryResult<AudioFileDto[]>(overrides);
+}
+
 function renderDashboard() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
@@ -59,44 +90,56 @@ describe('DashboardPage', () => {
   });
 
   it('shows loading state while fetching', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: undefined,
       isLoading: true,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: false,
+      isPending: true,
+      isFetching: true,
+    }));
 
     renderDashboard();
     expect(screen.getByText(/loading audio files/i)).toBeInTheDocument();
   });
 
   it('shows error state when fetch fails', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: undefined,
       isLoading: false,
       isError: true,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: false,
+      isPending: false,
+      isFetching: false,
+    }));
 
     renderDashboard();
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
   });
 
   it('shows empty state when no files', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     renderDashboard();
     expect(screen.getByText(/no audio files yet/i)).toBeInTheDocument();
   });
 
   it('renders audio list with filenames', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     renderDashboard();
     expect(screen.getByText('interview.mp3')).toBeInTheDocument();
@@ -104,11 +147,14 @@ describe('DashboardPage', () => {
   });
 
   it('renders status badges for each file', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     renderDashboard();
     expect(screen.getByText('Queued')).toBeInTheDocument();
@@ -116,11 +162,14 @@ describe('DashboardPage', () => {
   });
 
   it('shows Open Editor link only for COMPLETE files', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     renderDashboard();
     expect(screen.getByRole('link', { name: /open editor/i })).toBeInTheDocument();
@@ -128,24 +177,33 @@ describe('DashboardPage', () => {
   });
 
   it('registers transcript:status socket listener on mount', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     renderDashboard();
     expect(mockSocket.on).toHaveBeenCalledWith('transcript:status', expect.any(Function));
   });
 
   it('updates status badge when transcript:status socket event fires', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     const { queryClient } = renderDashboard();
+
+    // Pre-seed the cache so the socket handler has data to update
+    queryClient.setQueryData(['audio'], mockAudioFiles);
 
     const handler = mockSocket.on.mock.calls.find(
       (call) => call[0] === 'transcript:status',
@@ -163,11 +221,14 @@ describe('DashboardPage', () => {
   });
 
   it('removes socket listener on unmount', () => {
-    vi.mocked(useAudioList).mockReturnValue({
+    vi.mocked(useAudioList).mockReturnValue(createMockAudioQueryResult({
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+      isSuccess: true,
+      isPending: false,
+      isFetching: false,
+    }));
 
     const { unmount } = renderDashboard();
     unmount();
