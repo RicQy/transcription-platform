@@ -1,3 +1,4 @@
+name: legal-transcribe-app
 services:
   postgres:
     image: postgres:15-alpine
@@ -78,3 +79,4 @@ volumes:
   postgres_data:
   redis_data:
   uploads:
+
