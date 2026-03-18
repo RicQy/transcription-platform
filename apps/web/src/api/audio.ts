@@ -41,7 +41,7 @@ export function useUploadAudio() {
   return useMutation({
     mutationFn: async ({ file, onProgress }: UploadAudioParams) => {
       const formData = new FormData();
-      formData.append('audio', file);
+      formData.append('file', file);
 
       const res = await apiClient.post<AudioFileDto>('/audio', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
