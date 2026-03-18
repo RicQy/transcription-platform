@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AudioStatus } from '@transcribe/shared-types';
 import type { AudioFileDto, TranscriptStatusEvent } from '@transcribe/shared-types';
-import { useAudioList, AUDIO_QUERY_KEY } from '../api/audio';
+import { useAudioList, AUDIO_QUERY_KEY, useDeleteAudio } from '../api/audio';
 import { useSocket } from '../hooks/useSocket';
 
 const STATUS_LABELS: Record<AudioStatus, string> = {
@@ -50,6 +50,7 @@ function formatDate(iso: string): string {
 
 export default function DashboardPage() {
   const { data: audioFiles, isLoading, isError } = useAudioList();
+  const deleteAudio = useDeleteAudio();
   const queryClient = useQueryClient();
   const socket = useSocket();
 
@@ -139,7 +140,7 @@ export default function DashboardPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <StatusBadge status={file.status} />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap flex items-center gap-4 text-sm">
                     {file.status === AudioStatus.COMPLETE ? (
                       <Link
                         to={`/editor/${file.id}`}
@@ -150,6 +151,16 @@ export default function DashboardPage() {
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}
+                    <button
+                      onClick={() => {
+                        if (confirm('Are you sure you want to delete this file?')) {
+                          deleteAudio.mutate(file.id);
+                        }
+                      }}
+                      className="text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -58,3 +58,16 @@ export function useUploadAudio() {
     },
   });
 }
+
+export function useDeleteAudio() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/audio/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: AUDIO_QUERY_KEY });
+    },
+  });
+}
