@@ -40,7 +40,7 @@ router.put('/:id/segments', authenticateToken, async (req: AuthenticatedRequest,
       segments.map((seg) =>
         prisma.transcriptSegment.update({
           where: { id: seg.id },
-          data: { text: seg.text, speaker: seg.speaker, wordData: seg.wordData as Prisma.InputJsonValue },
+          data: { text: seg.text, speaker: seg.speaker, wordData: seg.wordData as unknown as Prisma.InputJsonValue },
         }),
       ),
     );
@@ -172,7 +172,7 @@ router.patch('/:id/segments/:segId/words/:wordIdx/verify', authenticateToken, as
 
     const updated = await prisma.transcriptSegment.update({
       where: { id: seg.id },
-      data: { wordData: wordData as Prisma.InputJsonValue },
+      data: { wordData: wordData as unknown as Prisma.InputJsonValue },
     });
 
     res.json(updated);

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { StyleGuideRule } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
@@ -57,6 +58,6 @@ export async function generateValidationLogicForGuide(
   logger.info('Generating validation logic for rules', { guideId, count: rules.length });
 
   await Promise.all(
-    rules.map((rule) => generateValidationLogic(rule.id, rule.ruleText, openaiClient)),
+    rules.map((rule: StyleGuideRule) => generateValidationLogic(rule.id, rule.ruleText, openaiClient)),
   );
 }

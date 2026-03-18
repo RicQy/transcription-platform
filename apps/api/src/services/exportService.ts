@@ -53,7 +53,7 @@ export function toTranscribeMe(transcript: TranscriptWithSegments, activeRules: 
 export async function toDocx(transcript: TranscriptWithSegments, activeRules: StyleGuideRule[]): Promise<Buffer> {
   const speakerFormat = getSpeakerFormat(activeRules);
 
-  const paragraphs = transcript.segments.flatMap((seg) => [
+  const paragraphs = transcript.segments.flatMap((seg: TranscriptSegment) => [
     new Paragraph({
       children: [new TextRun({ text: formatSpeaker(seg.speaker, speakerFormat), bold: true })],
     }),

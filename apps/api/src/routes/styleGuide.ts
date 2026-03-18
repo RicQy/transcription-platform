@@ -1,4 +1,4 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, IRouter, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -12,7 +12,7 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getIo } from '../sockets/index';
 
-const router = Router();
+const router: IRouter = Router();
 
 // PDF upload storage
 const pdfStorage = multer.diskStorage({

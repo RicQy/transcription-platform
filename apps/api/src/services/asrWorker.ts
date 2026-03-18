@@ -25,7 +25,7 @@ export function startAsrWorker(): Worker {
         audio_path: audioPath,
         audio_id: audioId,
         model_size: env.WHISPER_MODEL_SIZE,
-        callback_url: `http://localhost:${env.PORT}/internal/asr-complete`,
+        callback_url: `http://api:${env.PORT}/internal/asr-complete`,
       });
 
       logger.info('ASR worker HTTP request sent', { audioId });

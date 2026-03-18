@@ -2,7 +2,11 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUploadAudio } from '../api/audio';
 
-const ACCEPTED_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'audio/flac'];
+const ACCEPTED_TYPES = [
+  'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/wav', 'audio/wave',
+  'audio/x-wav', 'audio/x-m4a', 'audio/m4a', 'audio/flac', 'audio/x-flac',
+  'video/mp4', '', // empty string = browser couldn't detect type, fall back to extension check
+];
 const ACCEPTED_EXTENSIONS = ['.mp3', '.mp4', '.wav', '.m4a', '.flac'];
 
 function isAudioFile(file: File): boolean {
@@ -23,7 +27,7 @@ export default function AudioUploadPage() {
 
   const handleFile = useCallback((file: File) => {
     if (!isAudioFile(file)) {
-      setError(`Invalid file type. Accepted formats: ${ACCEPTED_EXTENSIONS.join(', ')}`);
+      setError(`Invalid file type "${file.type || 'unknown'}". Accepted formats: ${ACCEPTED_EXTENSIONS.join(', ')}`);
       setSelectedFile(null);
       return;
     }
@@ -70,8 +74,9 @@ export default function AudioUploadPage() {
         onProgress: setUploadProgress,
       });
       navigate('/dashboard');
-    } catch {
-      setError('Upload failed. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Upload failed: ${msg}`);
     }
   };
 
