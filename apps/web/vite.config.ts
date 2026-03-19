@@ -8,13 +8,13 @@ export default defineConfig({
     port: Number(process.env.PORT) || 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3002',
+        target: process.env.VITE_API_URL || 'http://localhost:3002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
 /*
       '/socket.io': {
-        target: 'http://localhost:3002',
+        target: process.env.VITE_API_URL || 'http://localhost:3002',
         ws: true,
       },
 */
@@ -23,5 +23,12 @@ export default defineConfig({
   preview: {
     host: true,
     port: Number(process.env.PORT) || 5173,
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_URL || 'http://localhost:3002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
 });
