@@ -23,5 +23,5 @@ COPY . .
 # Default port
 EXPOSE 3001
 
-# Default command (will be overridden by celery_worker in compose)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001"]
+# Default command
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-3001}"]
