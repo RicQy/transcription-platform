@@ -26,8 +26,10 @@ export function useAudio(id: string) {
   });
 }
 
+import { getApiUrl } from './config';
+
 export function streamAudioUrl(id: string): string {
-  return `/api/audio/${id}/stream`;
+  return getApiUrl(`/audio/${id}/stream`);
 }
 
 export interface UploadAudioParams {

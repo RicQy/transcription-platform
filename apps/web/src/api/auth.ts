@@ -1,8 +1,10 @@
 import axios from 'axios';
 import type { UserDto } from '@transcribe/shared-types';
 
+import { getApiBaseUrl } from './config';
+
 export const apiClient = axios.create({
-  baseURL: '/api',
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
 });
 
