@@ -11,6 +11,7 @@
     "lint": "eslint --ext .ts,.tsx apps/api/src apps/web/src packages/shared-types/src",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "build:web": "pnpm --filter @transcribe/shared-types build && pnpm --filter @transcribe/web build",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore"
   },
   "workspaces": [
