@@ -11,11 +11,21 @@ import logging
 from asr import transcribe
 from diarization import diarize
 from merger import merge
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 logger = logging.getLogger(__name__)
+
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("OPENAI_API_KEY is not set. Style guide refinement will be skipped.")
+            return None
+        from openai import OpenAI
+        _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
@@ -47,8 +57,15 @@ def apply_legal_style_guide(db, transcript_id, segments_dto, audio_id):
 
     rules_text = "\n".join([f"- [{r.ruleType}] {r.ruleText}" for r in rules])
     
+    client = get_openai_client()
+    if not client:
+        logger.info("OpenAI client not initialized. Skipping refinement.")
+        return segments_dto
+
     refined_segments = []
-    # Process in batches of 10 segments to avoid context window issues and keep it snappy
+    logger.info(f"Starting refinement for {audio_id} (Segments: {len(segments_dto)})")
+    
+    # Process in batches of 10 segments
     for i in range(0, len(segments_dto), 10):
         batch = segments_dto[i:i+10]
         batch_text = "\n".join([f"{s['speaker']}: {s['text']}" for s in batch])
@@ -75,6 +92,7 @@ Exclusion: Do not change the meaning, only apply formatting and 'clean verbatim'
                 if j < len(refined_texts):
                     segment["text"] = refined_texts[j].strip()
                 refined_segments.append(segment)
+            logger.info(f"Refined batch {i//10 + 1}/{(len(segments_dto)-1)//10 + 1}")
         except Exception as e:
             logger.error(f"OpenAI error refining batch {i}: {e}")
             refined_segments.extend(batch) # Fallback to original
