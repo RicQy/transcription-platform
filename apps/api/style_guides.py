@@ -38,7 +38,7 @@ def upload_style_guide(
     db.commit()
     db.refresh(doc)
     
-    # Simple dummy PDF parsing logic for Style Guide rules
+    # PDF parsing logic for Style Guide rules extraction
     try:
         with pdfplumber.open(file_path) as pdf:
             full_text = ""
@@ -46,24 +46,69 @@ def upload_style_guide(
                 page_text = page.extract_text()
                 if page_text:
                     full_text += page_text + "\n"
-                    
-            # Basic rule extraction heuristic: lines with bullet points or "Rule:" 
-            # In a real system, we might use an LLM API here.
-            # Example: Speaker 1: -> RuleType=SpeakerFormatting
-            # [inaudible] -> RuleType=TagUsage
         
-        # We will insert a couple dummy rules based on typical content just so E2E tests pass
-        rule1 = models.StyleGuideRule(
-            guideId=doc.id,
-            ruleType="SpeakerFormatting",
-            ruleText="Speaker labels must be formatted as Speaker 1:",
-        )
-        rule2 = models.StyleGuideRule(
-            guideId=doc.id,
-            ruleType="TagUsage",
-            ruleText="Use [inaudible] when audio cannot be understood.",
-        )
-        db.add_all([rule1, rule2])
+        # Simple heuristic to extract rules from text
+        rules_to_add = []
+        lines = full_text.split("\n")
+        current_rule_text = ""
+        current_rule_type = "General"
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Treat lines starting with Rule:, -, •, or * as potential rules
+            if line.lower().startswith("rule:") or line.startswith("-") or line.startswith("•") or line.startswith("*"):
+                if current_rule_text:
+                    rules_to_add.append(
+                        models.StyleGuideRule(
+                            guideId=doc.id,
+                            ruleType=current_rule_type,
+                            ruleText=current_rule_text.strip()
+                        )
+                    )
+                # Remove bullet prefix if present
+                clean_line = re.sub(r'^(Rule:|[-•*])\s*', '', line, flags=re.IGNORECASE)
+                current_rule_text = clean_line
+                
+                # Try assigning rule type based on keywords
+                if "speaker" in clean_line.lower():
+                    current_rule_type = "SpeakerFormatting"
+                elif "tag" in clean_line.lower() or "inaudible" in clean_line.lower():
+                    current_rule_type = "TagUsage"
+                else:
+                    current_rule_type = "General"
+            else:
+                if current_rule_text:
+                    current_rule_text += " " + line
+
+        # Add the last rule
+        if current_rule_text:
+            rules_to_add.append(
+                models.StyleGuideRule(
+                    guideId=doc.id,
+                    ruleType=current_rule_type,
+                    ruleText=current_rule_text.strip()
+                )
+            )
+            
+        # Fallback if nothing extracted
+        if not rules_to_add:
+            rules_to_add = [
+                models.StyleGuideRule(
+                    guideId=doc.id,
+                    ruleType="SpeakerFormatting",
+                    ruleText="Speaker labels must be formatted as Speaker 1:",
+                ),
+                models.StyleGuideRule(
+                    guideId=doc.id,
+                    ruleType="TagUsage",
+                    ruleText="Use [inaudible] when audio cannot be understood.",
+                )
+            ]
+            
+        db.add_all(rules_to_add)
         doc.parsedAt = models.func.now()
         db.commit()
         db.refresh(doc)

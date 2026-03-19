@@ -52,6 +52,7 @@ def delete_audio_file(audio_id: str, db: Session = Depends(get_db)):
     if not audio:
         raise HTTPException(status_code=404, detail="Audio file not found")
         
+    file_to_delete = audio.filePath
     try:
         transcripts = db.query(models.Transcript).filter(models.Transcript.audioFileId == audio_id).all()
         for t in transcripts:
@@ -63,9 +64,9 @@ def delete_audio_file(audio_id: str, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
         
-    if audio.filePath and os.path.exists(audio.filePath):
+    if file_to_delete and os.path.exists(file_to_delete):
         try:
-            os.remove(audio.filePath)
+            os.remove(file_to_delete)
         except Exception:
             pass
             

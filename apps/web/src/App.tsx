@@ -4,6 +4,7 @@ import { Role } from '@transcribe/shared-types';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AudioUploadPage from './pages/AudioUploadPage';
+import StyleGuideAdminPage from './pages/StyleGuideAdminPage';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
@@ -25,7 +26,7 @@ export default function App() {
 
           <Route element={<ProtectedRoute requiredRole={Role.ADMIN} />}>
             <Route element={<AppShell />}>
-              <Route path="/admin/style-guides" element={<div>Style Guides (coming soon)</div>} />
+              <Route path="/admin/style-guides" element={<StyleGuideAdminPage />} />
             </Route>
           </Route>
 

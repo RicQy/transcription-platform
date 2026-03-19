@@ -18,9 +18,12 @@ vi.mock('../hooks/useSocket', () => ({
 vi.mock('../api/audio', () => ({
   AUDIO_QUERY_KEY: ['audio'],
   useAudioList: vi.fn(),
+  useDeleteAudio: vi.fn(() => ({
+    mutateAsync: vi.fn(),
+  })),
 }));
 
-import { useAudioList } from '../api/audio';
+import { useAudioList, AUDIO_QUERY_KEY } from '../api/audio';
 
 const mockAudioFiles: AudioFileDto[] = [
   {
@@ -63,7 +66,7 @@ describe('DashboardPage', () => {
       data: undefined,
       isLoading: true,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     renderDashboard();
     expect(screen.getByText(/loading audio files/i)).toBeInTheDocument();
@@ -74,7 +77,7 @@ describe('DashboardPage', () => {
       data: undefined,
       isLoading: false,
       isError: true,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     renderDashboard();
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
@@ -85,7 +88,7 @@ describe('DashboardPage', () => {
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     renderDashboard();
     expect(screen.getByText(/no audio files yet/i)).toBeInTheDocument();
@@ -96,7 +99,7 @@ describe('DashboardPage', () => {
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     renderDashboard();
     expect(screen.getByText('interview.mp3')).toBeInTheDocument();
@@ -108,7 +111,7 @@ describe('DashboardPage', () => {
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     renderDashboard();
     expect(screen.getByText('Queued')).toBeInTheDocument();
@@ -120,7 +123,7 @@ describe('DashboardPage', () => {
       data: mockAudioFiles,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     renderDashboard();
     expect(screen.getByRole('link', { name: /open editor/i })).toBeInTheDocument();
@@ -146,9 +149,10 @@ describe('DashboardPage', () => {
     } as ReturnType<typeof useAudioList>);
 
     const { queryClient } = renderDashboard();
+    queryClient.setQueryData(AUDIO_QUERY_KEY, mockAudioFiles);
 
     const handler = mockSocket.on.mock.calls.find(
-      (call) => call[0] === 'transcript:status',
+      (call: any[]) => call[0] === 'transcript:status',
     )?.[1] as ((payload: { audioId: string; status: AudioStatus }) => void) | undefined;
 
     expect(handler).toBeDefined();
@@ -157,8 +161,8 @@ describe('DashboardPage', () => {
       handler!({ audioId: 'file-1', status: AudioStatus.PROCESSING });
     });
 
-    const cached = queryClient.getQueryData<AudioFileDto[]>(['audio']);
-    const updated = cached?.find((f) => f.id === 'file-1');
+    const cached = queryClient.getQueryData(AUDIO_QUERY_KEY) as AudioFileDto[] | undefined;
+    const updated = cached?.find((f: AudioFileDto) => f.id === 'file-1');
     expect(updated?.status).toBe(AudioStatus.PROCESSING);
   });
 
@@ -167,7 +171,7 @@ describe('DashboardPage', () => {
       data: [],
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useAudioList>);
+    } as any);
 
     const { unmount } = renderDashboard();
     unmount();

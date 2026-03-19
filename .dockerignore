@@ -1,0 +1,16 @@
+# Exclude model caches and local environments
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.env
+venv/
+node_modules/
+apps/api/venv/
+apps/api/models/
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+.git
+.vscode
+.idea
+*.log

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AudioUploadPage from '../pages/AudioUploadPage';
@@ -79,7 +81,7 @@ describe('AudioUploadPage', () => {
 
     const input = screen.getByTestId('file-input');
     const file = createFile('document.pdf', 'application/pdf');
-    await user.upload(input, file);
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -93,7 +95,7 @@ describe('AudioUploadPage', () => {
 
     const input = screen.getByTestId('file-input');
     const file = createFile('notes.txt', 'text/plain');
-    await user.upload(input, file);
+    fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/invalid file type/i);

@@ -1,15 +1,15 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared-types/package.json ./packages/shared-types/
 RUN pnpm install --frozen-lockfile
 COPY apps/web ./apps/web
 COPY packages/shared-types ./packages/shared-types
 COPY tsconfig.base.json ./
-RUN pnpm --filter @transcribe/shared-types build
-RUN pnpm --filter @transcribe/web build
+RUN pnpm --filter @transcribe/shared-types exec tsc
+RUN pnpm --filter @transcribe/web exec vite build
 
 FROM nginx:alpine
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html

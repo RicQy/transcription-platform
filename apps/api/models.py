@@ -85,3 +85,13 @@ class ValidationErrorRecord(Base):
     positionEnd = Column(Integer, nullable=False)
     message = Column(String, nullable=False)
     isResolved = Column(Boolean, default=False)
+
+from pydantic import BaseModel
+from typing import Optional
+
+class WordResult(BaseModel):
+    word: str
+    start: float
+    end: float
+    confidence: float
+    speaker_id: Optional[str] = None
