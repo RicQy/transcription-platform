@@ -1,16 +1,35 @@
-# Exclude model caches and local environments
+# Python caches
 **/__pycache__
 **/*.pyc
 **/*.pyo
 **/*.pyd
+
+# Local env (never bake secrets into image)
 .env
+
+# Python virtualenvs
 venv/
-node_modules/
 apps/api/venv/
+
+# Node modules (Docker installs its own)
+node_modules/
+**/node_modules/
+
+# Whisper model cache (huge, download at runtime)
 apps/api/models/
+
+# User uploads (runtime data, not part of build)
 apps/api/uploads/*
 !apps/api/uploads/.gitkeep
-.git
-.vscode
-.idea
+
+# Git / editor
+.git/
+.vscode/
+.idea/
+
+# Logs
 *.log
+
+# OS
+.DS_Store
+Thumbs.db
