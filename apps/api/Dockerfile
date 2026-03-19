@@ -13,7 +13,10 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /app/models
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Force CPU-only PyTorch to keep image size small (<1GB)
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
