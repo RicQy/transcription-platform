@@ -121,7 +121,7 @@ export function useTranscribeAudio() {
   return useMutation({
     mutationFn: async ({
       audioFileId,
-      provider = 'openai',
+      provider = 'iflytek',
     }: {
       audioFileId: string;
       provider?: 'openai' | 'iflytek';

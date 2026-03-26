@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const socket = useSocket();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [provider, setProvider] = useState<'openai' | 'iflytek'>('openai');
+  const [provider, setProvider] = useState<'openai' | 'iflytek'>('iflytek');
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked && audioFiles) {
@@ -231,8 +231,8 @@ export default function DashboardPage() {
                           onChange={(e) => setProvider(e.target.value as 'openai' | 'iflytek')}
                           className="text-xs border border-gray-300 rounded px-2 py-1"
                         >
-                          <option value="openai">OpenAI</option>
                           <option value="iflytek">iFLYTEK</option>
+                          <option value="openai">OpenAI</option>
                         </select>
                         <button
                           onClick={() => transcribeAudio.mutate({ audioFileId: file.id, provider })}
