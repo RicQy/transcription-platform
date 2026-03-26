@@ -1,0 +1,14 @@
+Usage: insforge secrets [options] [command]
+
+Manage secrets
+
+Options:
+  -h, --help                   display help for command
+
+Commands:
+  list [options]               List secrets (metadata only, values are hidden)
+  get <key>                    Get the decrypted value of a secret
+  add [options] <key> <value>  Create a new secret
+  update [options] <key>       Update an existing secret
+  delete <key>                 Delete a secret
+  help [command]               display help for command

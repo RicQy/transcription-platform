@@ -2,9 +2,52 @@ import * as React from 'react';
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUploadAudio } from '../api/audio';
+import { isConvertible, convertToPCM16kHz, loadFFmpeg } from '../utils/audioConverter';
 
-const ACCEPTED_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'audio/flac'];
-const ACCEPTED_EXTENSIONS = ['.mp3', '.mp4', '.wav', '.m4a', '.flac'];
+const ACCEPTED_TYPES = [
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/wav',
+  'audio/x-m4a',
+  'audio/flac',
+  'audio/webm',
+  'audio/ogg',
+  'audio/aac',
+  'audio/ac3',
+  'audio/amr',
+  'audio/x-ms-wma',
+  'audio/x-aiff',
+  'audio/x-ape',
+  'audio/opus',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/x-ms-wmv',
+  'video/3gpp',
+];
+const ACCEPTED_EXTENSIONS = [
+  '.mp3',
+  '.mp4',
+  '.wav',
+  '.m4a',
+  '.flac',
+  '.webm',
+  '.ogg',
+  '.aac',
+  '.ac3',
+  '.amr',
+  '.wma',
+  '.aiff',
+  '.ape',
+  '.opus',
+  '.mov',
+  '.avi',
+  '.mkv',
+  '.wmv',
+  '.3gp',
+];
 
 function isAudioFile(file: File): boolean {
   const ext = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -19,11 +62,15 @@ export default function AudioUploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState(0);
+  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((file: File) => {
-    if (!isAudioFile(file)) {
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!ACCEPTED_TYPES.includes(file.type) && !ACCEPTED_EXTENSIONS.includes(ext)) {
       setError(`Invalid file type. Accepted formats: ${ACCEPTED_EXTENSIONS.join(', ')}`);
       setSelectedFile(null);
       return;
@@ -31,6 +78,7 @@ export default function AudioUploadPage() {
     setError(null);
     setSelectedFile(file);
     setUploadProgress(0);
+    setConversionProgress(0);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -64,10 +112,35 @@ export default function AudioUploadPage() {
     if (!selectedFile) return;
     setError(null);
     setUploadProgress(0);
+    setConversionProgress(0);
 
     try {
+      let fileToUpload = selectedFile;
+
+      if (isConvertible(selectedFile)) {
+        setIsConverting(true);
+        try {
+          await loadFFmpeg();
+          setFfmpegLoaded(true);
+          fileToUpload = new File(
+            [
+              await convertToPCM16kHz(selectedFile, {
+                onProgress: setConversionProgress,
+              }),
+            ],
+            selectedFile.name.replace(/\.[^/.]+$/, '') + '.wav',
+            { type: 'audio/wav' },
+          );
+        } catch (convError) {
+          console.error('Conversion failed:', convError);
+          setError('Audio conversion failed. Uploading original file.');
+          fileToUpload = selectedFile;
+        }
+        setIsConverting(false);
+      }
+
       await uploadAudio({
-        file: selectedFile,
+        file: fileToUpload,
         onProgress: setUploadProgress,
       });
       navigate('/dashboard');
@@ -113,9 +186,7 @@ export default function AudioUploadPage() {
         <p className="text-sm text-gray-600">
           <span className="font-medium text-blue-600">Click to upload</span> or drag and drop
         </p>
-        <p className="text-xs text-gray-400 mt-1">
-          {ACCEPTED_EXTENSIONS.join(', ')} (max 2 GB)
-        </p>
+        <p className="text-xs text-gray-400 mt-1">{ACCEPTED_EXTENSIONS.join(', ')} (max 2 GB)</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -146,6 +217,24 @@ export default function AudioUploadPage() {
 
       {isPending && (
         <div className="mt-4">
+          {isConverting && (
+            <div className="mb-3">
+              <div className="flex justify-between text-xs text-purple-600 mb-1">
+                <span>Converting to PCM 16kHz…</span>
+                <span>{conversionProgress}%</span>
+              </div>
+              <div className="w-full bg-purple-200 rounded-full h-2">
+                <div
+                  role="progressbar"
+                  aria-valuenow={conversionProgress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-200"
+                  style={{ width: `${conversionProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex justify-between text-xs text-gray-600 mb-1">
             <span>Uploading…</span>
             <span>{uploadProgress}%</span>
@@ -175,11 +264,11 @@ export default function AudioUploadPage() {
         <button
           type="button"
           onClick={handleUpload}
-          disabled={!selectedFile || isPending}
+          disabled={!selectedFile || isPending || isConverting}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="upload-button"
         >
-          {isPending ? 'Uploading…' : 'Upload'}
+          {isConverting ? 'Converting…' : isPending ? 'Uploading…' : 'Upload'}
         </button>
       </div>
     </div>

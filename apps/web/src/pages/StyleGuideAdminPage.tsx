@@ -1,15 +1,28 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { insforge } from '../api/insforge';
 
-const API_URL = '/api';
+const FUNCTIONS_URL =
+  import.meta.env.VITE_FUNCTIONS_URL || 'https://yyjgv7tf.us-east.insforge.app/functions';
+
+interface StyleGuideRule {
+  id: string;
+  guide_id: string;
+  rule_type: string;
+  rule_text: string;
+  source_page: number | null;
+  is_active: boolean;
+}
 
 interface StyleGuide {
   id: string;
   version: string;
-  pdfFilePath: string;
-  isActive: boolean;
-  uploadDate: string;
+  storage_key: string;
+  storage_url: string;
+  is_active: boolean;
+  parsed_at: string | null;
+  created_at: string;
+  rules?: StyleGuideRule[];
 }
 
 export default function StyleGuideAdminPage() {
@@ -17,21 +30,56 @@ export default function StyleGuideAdminPage() {
   const [version, setVersion] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { data: guides, isLoading } = useQuery<StyleGuide[]>({
     queryKey: ['style-guides'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/style-guides/`);
-      return response.data;
+      const response = await fetch(`${FUNCTIONS_URL}/style-guide`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch style guides');
+      return response.json();
     },
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const response = await axios.post(`${API_URL}/style-guides/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+    mutationFn: async ({ version, file }: { version: string; file: File }) => {
+      setError(null);
+
+      const storageKey = `style-guides/${Date.now()}-${file.name}`;
+
+      const { error: uploadError } = await insforge.storage
+        .from('style-guides')
+        .upload(storageKey, file);
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      const storageUrl = insforge.storage.from('style-guides').getPublicUrl(storageKey);
+
+      const response = await fetch(`${FUNCTIONS_URL}/style-guide`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version,
+          storageKey,
+          storageUrl,
+        }),
       });
-      return response.data;
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create style guide');
+      }
+
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['style-guides'] });
@@ -40,9 +88,9 @@ export default function StyleGuideAdminPage() {
       setUploading(false);
       alert('Style guide uploaded successfully!');
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Upload failed:', error);
-      alert('Upload failed. Please try again.');
+      setError(error.message);
       setUploading(false);
     },
   });
@@ -52,10 +100,8 @@ export default function StyleGuideAdminPage() {
     if (!file || !version) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('version', version);
-    formData.append('file', file);
-    uploadMutation.mutate(formData);
+    setError(null);
+    uploadMutation.mutate({ version, file });
   };
 
   return (
@@ -71,7 +117,7 @@ export default function StyleGuideAdminPage() {
               type="text"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
-              placeholder="e.g. Legal Style Guide 2026"
+              placeholder="e.g. Legal Style Guide v1.0"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
@@ -86,6 +132,13 @@ export default function StyleGuideAdminPage() {
               required
             />
           </div>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={uploading || !file || !version}
@@ -94,31 +147,55 @@ export default function StyleGuideAdminPage() {
             {uploading ? 'Uploading...' : 'Upload Style Guide'}
           </button>
         </form>
+
+        <p className="mt-4 text-sm text-gray-500">
+          Note: Uploading a new style guide will automatically set it as the active version.
+          Previous versions will be preserved but marked as inactive.
+        </p>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Version</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Upload Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Version
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Upload Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Rules Count
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
-              <tr><td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">Loading...</td></tr>
+              <tr>
+                <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                  Loading...
+                </td>
+              </tr>
             ) : guides?.length === 0 ? (
-              <tr><td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">No style guides found.</td></tr>
+              <tr>
+                <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                  No style guides found.
+                </td>
+              </tr>
             ) : (
               guides?.map((guide) => (
-                <tr key={guide.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{guide.version}</td>
+                <tr key={guide.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {guide.version}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(guide.uploadDate).toLocaleString()}
+                    {new Date(guide.created_at).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {guide.isActive ? (
+                    {guide.is_active ? (
                       <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                         Active
                       </span>
@@ -128,12 +205,35 @@ export default function StyleGuideAdminPage() {
                       </span>
                     )}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {guide.rules?.length || 0} rules
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {guides && guides.length > 0 && guides.some((g) => g.is_active && g.rules) && (
+        <div className="mt-8 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-lg font-medium mb-4">Active Style Guide Rules</h3>
+          <div className="space-y-4">
+            {guides
+              .find((g) => g.is_active)
+              ?.rules?.map((rule) => (
+                <div key={rule.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800">
+                      {rule.rule_type}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">{rule.rule_text}</p>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

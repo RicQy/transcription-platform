@@ -1,0 +1,8 @@
+Usage: insforge secrets add [options] <key> <value>
+
+Create a new secret
+
+Options:
+  --reserved        Mark secret as protected from deletion
+  --expires <date>  Expiration date (ISO 8601 format)
+  -h, --help        display help for command

@@ -8,8 +8,24 @@ let sharedSocket: AppSocket | null = null;
 
 function getSocket(): AppSocket | null {
   if (typeof window === 'undefined') return null;
+
+  const socketUrl = import.meta.env.VITE_SOCKET_URL;
+  if (!socketUrl) return null;
+
   if (!sharedSocket) {
-    sharedSocket = io('/', { withCredentials: true, transports: ['websocket'] });
+    sharedSocket = io(socketUrl, {
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+      reconnection: false,
+    });
+
+    sharedSocket.on('connect', () => {
+      console.log('Socket connected');
+    });
+
+    sharedSocket.on('connect_error', () => {
+      console.log('Socket connection not available');
+    });
   }
   return sharedSocket;
 }

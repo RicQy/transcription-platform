@@ -3,31 +3,39 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AudioStatus } from '@transcribe/shared-types';
-import type { AudioFileDto, TranscriptStatusEvent } from '@transcribe/shared-types';
-import { useAudioList, AUDIO_QUERY_KEY, useDeleteAudio } from '../api/audio';
+import type { TranscriptStatusEvent } from '@transcribe/shared-types';
+import {
+  useAudioList,
+  AUDIO_QUERY_KEY,
+  useDeleteAudio,
+  useTranscribeAudio,
+  type AudioFileDto,
+} from '../api/audio';
 import { useSocket } from '../hooks/useSocket';
 
-const STATUS_LABELS: Record<AudioStatus, string> = {
-  [AudioStatus.QUEUED]: 'Queued',
-  [AudioStatus.PROCESSING]: 'Processing',
-  [AudioStatus.COMPLETE]: 'Complete',
-  [AudioStatus.ERROR]: 'Error',
+const STATUS_LABELS: Record<string, string> = {
+  UPLOADED: 'Uploaded',
+  QUEUED: 'Queued',
+  PROCESSING: 'Processing',
+  COMPLETE: 'Complete',
+  ERROR: 'Error',
 };
 
-const STATUS_CLASSES: Record<AudioStatus, string> = {
-  [AudioStatus.QUEUED]: 'bg-gray-100 text-gray-700',
-  [AudioStatus.PROCESSING]: 'bg-blue-100 text-blue-700',
-  [AudioStatus.COMPLETE]: 'bg-green-100 text-green-700',
-  [AudioStatus.ERROR]: 'bg-red-100 text-red-700',
+const STATUS_CLASSES: Record<string, string> = {
+  UPLOADED: 'bg-gray-100 text-gray-700',
+  QUEUED: 'bg-gray-100 text-gray-700',
+  PROCESSING: 'bg-blue-100 text-blue-700',
+  COMPLETE: 'bg-green-100 text-green-700',
+  ERROR: 'bg-red-100 text-red-700',
 };
 
-function StatusBadge({ status }: { status: AudioStatus }) {
+function StatusBadge({ status }: { status: string }) {
   return (
     <span
       data-testid={`status-badge-${status}`}
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CLASSES[status]}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CLASSES[status] || 'bg-gray-100 text-gray-700'}`}
     >
-      {STATUS_LABELS[status]}
+      {STATUS_LABELS[status] || status}
     </span>
   );
 }
@@ -52,13 +60,15 @@ function formatDate(iso: string): string {
 export default function DashboardPage() {
   const { data: audioFiles, isLoading, isError } = useAudioList();
   const deleteAudio = useDeleteAudio();
+  const transcribeAudio = useTranscribeAudio();
   const queryClient = useQueryClient();
   const socket = useSocket();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [provider, setProvider] = useState<'openai' | 'iflytek'>('openai');
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked && audioFiles) {
-      setSelectedIds(new Set(audioFiles.map((f: AudioFileDto) => f.id)));
+      setSelectedIds(new Set(audioFiles.map((f) => f.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -75,22 +85,25 @@ export default function DashboardPage() {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} files?`)) {
       try {
-        await Promise.all(Array.from(selectedIds).map(id => deleteAudio.mutateAsync(id)));
+        await Promise.all(Array.from(selectedIds).map((id) => deleteAudio.mutateAsync(id)));
         setSelectedIds(new Set());
       } catch (e) {
-        console.error("Failed to delete some files", e);
+        console.error('Failed to delete some files', e);
       }
     }
   };
 
   useEffect(() => {
     const handler = (payload: TranscriptStatusEvent) => {
-      queryClient.setQueryData<AudioFileDto[]>(AUDIO_QUERY_KEY, (prev: AudioFileDto[] | undefined) => {
-        if (!prev) return prev;
-        return prev.map((file: AudioFileDto) =>
-          file.id === payload.audioId ? { ...file, status: payload.status } : file,
-        );
-      });
+      queryClient.setQueryData<AudioFileDto[]>(
+        AUDIO_QUERY_KEY,
+        (prev: AudioFileDto[] | undefined) => {
+          if (!prev) return prev;
+          return prev.map((file: AudioFileDto) =>
+            file.id === payload.audioId ? { ...file, status: payload.status } : file,
+          );
+        },
+      );
     };
 
     if (!socket) return;
@@ -149,10 +162,14 @@ export default function DashboardPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                  <input 
-                    type="checkbox" 
-                    onChange={handleSelectAll} 
-                    checked={!!audioFiles && audioFiles.length > 0 && selectedIds.size === audioFiles.length}
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAll}
+                    checked={
+                      !!audioFiles &&
+                      audioFiles.length > 0 &&
+                      selectedIds.size === audioFiles.length
+                    }
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                 </th>
@@ -177,9 +194,11 @@ export default function DashboardPage() {
               {audioFiles.map((file: AudioFileDto) => (
                 <tr key={file.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <input 
-                      type="checkbox" 
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSelectOne(file.id, e.target.checked)}
+                    <input
+                      type="checkbox"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        handleSelectOne(file.id, e.target.checked)
+                      }
                       checked={selectedIds.has(file.id)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -191,21 +210,41 @@ export default function DashboardPage() {
                     {formatDuration(file.duration)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(file.uploadDate)}
+                    {formatDate(file.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <StatusBadge status={file.status} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap flex items-center gap-4 text-sm">
-                    {file.status === AudioStatus.COMPLETE ? (
-                      <Link
-                        to={`/editor/${file.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
+                    {file.status === 'COMPLETE' ||
+                    file.transcription_status === 'completed' ||
+                    file.transcript_id ? (
+                      <Link to={`/editor/${file.id}`} className="text-blue-600 hover:underline">
                         Open Editor
                       </Link>
+                    ) : file.transcription_status === 'processing' ? (
+                      <span className="text-blue-600">Transcribing...</span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={provider}
+                          onChange={(e) => setProvider(e.target.value as 'openai' | 'iflytek')}
+                          className="text-xs border border-gray-300 rounded px-2 py-1"
+                        >
+                          <option value="openai">OpenAI</option>
+                          <option value="iflytek">iFLYTEK</option>
+                        </select>
+                        <button
+                          onClick={() => transcribeAudio.mutate({ audioFileId: file.id, provider })}
+                          disabled={transcribeAudio.isPending}
+                          className="text-green-600 hover:underline disabled:opacity-50"
+                        >
+                          {transcribeAudio.isPending &&
+                          transcribeAudio.variables?.audioFileId === file.id
+                            ? 'Starting...'
+                            : 'Transcribe'}
+                        </button>
+                      </div>
                     )}
                     <button
                       onClick={() => {

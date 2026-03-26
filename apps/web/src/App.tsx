@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AudioUploadPage from './pages/AudioUploadPage';
 import StyleGuideAdminPage from './pages/StyleGuideAdminPage';
+import TranscriptEditorPage from './pages/TranscriptEditorPage';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
@@ -21,6 +22,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/audio/upload" element={<AudioUploadPage />} />
+              <Route path="/editor/:id" element={<TranscriptEditorPage />} />
             </Route>
           </Route>
 
