@@ -1,62 +1,6 @@
-import axios from 'axios';
+import { insforge } from './insforge';
 import type { UserDto } from '@transcribe/shared-types';
-
-import { getApiBaseUrl } from './config';
-
-export const apiClient = axios.create({
-  baseURL: getApiBaseUrl(),
-  withCredentials: true,
-});
-
-let isRefreshing = false;
-let refreshSubscribers: Array<(token: boolean) => void> = [];
-
-function onRefreshed(success: boolean) {
-  refreshSubscribers.forEach((cb) => cb(success));
-  refreshSubscribers = [];
-}
-
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      originalRequest.url !== '/auth/refresh' &&
-      originalRequest.url !== '/auth/login'
-    ) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          refreshSubscribers.push((success) => {
-            if (success) {
-              resolve(apiClient(originalRequest));
-            } else {
-              reject(error);
-            }
-          });
-        });
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        await apiClient.post('/auth/refresh');
-        isRefreshing = false;
-        onRefreshed(true);
-        return apiClient(originalRequest);
-      } catch {
-        isRefreshing = false;
-        onRefreshed(false);
-        return Promise.reject(error);
-      }
-    }
-
-    return Promise.reject(error);
-  },
-);
+import { Role } from '@transcribe/shared-types';
 
 export interface LoginCredentials {
   email: string;
@@ -65,18 +9,66 @@ export interface LoginCredentials {
 
 export interface AuthResponse {
   user: UserDto;
+  accessToken?: string | null;
 }
 
+/**
+ * Sign in an existing user with email and password via InsForge SDK.
+ */
 export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
-  const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
-  return response.data;
+  const { data, error } = await insforge.auth.signInWithPassword({
+    email: credentials.email,
+    password: credentials.password,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Login failed');
+  }
+
+  if (!data || !data.user) {
+    throw new Error('User not found in response');
+  }
+
+  const user = {
+    id: data.user.id,
+    email: data.user.email,
+    role: (data.user as any).role || (data.user.profile as any)?.role || Role.USER,
+    createdAt: data.user.createdAt,
+  } as UserDto;
+
+  return {
+    user,
+    accessToken: data.accessToken,
+  };
 }
 
+/**
+ * Sign out the current user via InsForge SDK.
+ */
 export async function logout(): Promise<void> {
-  await apiClient.post('/auth/logout');
+  const { error } = await insforge.auth.signOut();
+  if (error) throw error;
 }
 
+/**
+ * Refresh user session via InsForge SDK.
+ * refreshSession() uses httpOnly cookies in browser mode to restore the session.
+ */
 export async function refreshToken(): Promise<AuthResponse> {
-  const response = await apiClient.post<AuthResponse>('/auth/refresh');
-  return response.data;
+  const { data, error } = await insforge.auth.refreshSession();
+
+  if (error) throw error;
+  if (!data) throw new Error('No session available');
+
+  const user = {
+    id: data.user.id,
+    email: data.user.email,
+    role: (data.user as any).role || (data.user as any).profile?.role || Role.USER,
+    createdAt: data.user.createdAt,
+  } as UserDto;
+
+  return {
+    user,
+    accessToken: data.accessToken,
+  };
 }

@@ -128,8 +128,8 @@ export default function AudioUploadPage() {
                 onProgress: setConversionProgress,
               }),
             ],
-            selectedFile.name.replace(/\.[^/.]+$/, '') + '.wav',
-            { type: 'audio/wav' },
+            selectedFile.name.replace(/\.[^/.]+$/, '') + '.pcm',
+            { type: 'audio/L16;rate=16000' },
           );
         } catch (convError) {
           console.error('Conversion failed:', convError);

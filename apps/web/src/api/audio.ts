@@ -127,7 +127,7 @@ export function useTranscribeAudio() {
       provider?: 'openai' | 'iflytek';
     }) => {
       const response = await fetch(
-        `${import.meta.env.VITE_INSFORGE_URL}/functions/whisper-transcribe`,
+        `${import.meta.env.VITE_INSFORGE_URL}/functions/iflytek-transcribe`,
         {
           method: 'POST',
           headers: {
@@ -140,6 +140,7 @@ export function useTranscribeAudio() {
           }),
         },
       );
+
 
       if (!response.ok) {
         const error = await response.json();

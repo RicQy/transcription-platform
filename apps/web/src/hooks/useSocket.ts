@@ -1,36 +1,32 @@
-import { useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
-import type { ServerToClientEvents, ClientToServerEvents } from '@transcribe/shared-types';
+import { useEffect, useState } from 'react';
+import { insforge } from '../api/insforge';
 
-type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+/**
+ * useSocket hook now uses InsForge Realtime SDK.
+ * It provides a thin wrapper around the SDK to maintain compatibility
+ * with existing .on / .off usage where possible.
+ */
+export function useSocket() {
+  const [isConnected, setIsConnected] = useState(insforge.realtime.isConnected);
 
-let sharedSocket: AppSocket | null = null;
+  useEffect(() => {
+    // Ensure we are connected
+    if (insforge.realtime.connectionState === 'disconnected') {
+      insforge.realtime.connect().catch(console.error);
+    }
 
-function getSocket(): AppSocket | null {
-  if (typeof window === 'undefined') return null;
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
 
-  const socketUrl = import.meta.env.VITE_SOCKET_URL;
-  if (!socketUrl) return null;
+    insforge.realtime.on('connect', onConnect);
+    insforge.realtime.on('disconnect', onDisconnect);
 
-  if (!sharedSocket) {
-    sharedSocket = io(socketUrl, {
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-      reconnection: false,
-    });
+    return () => {
+      insforge.realtime.off('connect', onConnect);
+      insforge.realtime.off('disconnect', onDisconnect);
+    };
+  }, []);
 
-    sharedSocket.on('connect', () => {
-      console.log('Socket connected');
-    });
-
-    sharedSocket.on('connect_error', () => {
-      console.log('Socket connection not available');
-    });
-  }
-  return sharedSocket;
+  return insforge.realtime;
 }
 
-export function useSocket(): AppSocket | null {
-  const socketRef = useRef<AppSocket | null>(getSocket());
-  return socketRef.current;
-}

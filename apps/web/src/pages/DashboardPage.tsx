@@ -94,24 +94,65 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    const handler = (payload: TranscriptStatusEvent) => {
-      queryClient.setQueryData<AudioFileDto[]>(
-        AUDIO_QUERY_KEY,
-        (prev: AudioFileDto[] | undefined) => {
-          if (!prev) return prev;
-          return prev.map((file: AudioFileDto) =>
-            file.id === payload.audioId ? { ...file, status: payload.status } : file,
-          );
-        },
-      );
+    if (!socket || !audioFiles) return;
+
+    const handleProgress = (payload: any) => {
+      queryClient.setQueryData<AudioFileDto[]>(AUDIO_QUERY_KEY, (prev) => {
+        if (!prev) return prev;
+        return prev.map((f) => 
+          f.id === payload.audioFileId 
+            ? { ...f, transcription_status: 'processing', status: 'PROCESSING' } 
+            : f
+        );
+      });
     };
 
-    if (!socket) return;
-    socket.on('transcript:status', handler);
-    return () => {
-      socket.off('transcript:status', handler);
+    const handleFinished = (payload: any) => {
+      queryClient.setQueryData<AudioFileDto[]>(AUDIO_QUERY_KEY, (prev) => {
+        if (!prev) return prev;
+        return prev.map((f) => 
+          f.id === payload.audioFileId 
+            ? { ...f, transcription_status: 'completed', status: 'COMPLETE', transcript_id: payload.transcriptId } 
+            : f
+        );
+      });
+      queryClient.invalidateQueries({ queryKey: AUDIO_QUERY_KEY });
     };
-  }, [socket, queryClient]);
+
+    const handleFailed = (payload: any) => {
+      queryClient.setQueryData<AudioFileDto[]>(AUDIO_QUERY_KEY, (prev) => {
+        if (!prev) return prev;
+        return prev.map((f) => 
+          f.id === payload.audioFileId 
+            ? { ...f, transcription_status: 'failed', status: 'ERROR' } 
+            : f
+        );
+      });
+    };
+
+    // Listen for events
+    socket.on('TRANSCRIPTION_STARTED', handleProgress);
+    socket.on('TRANSCRIPTION_PROGRESS', handleProgress);
+    socket.on('TRANSCRIPTION_FINISHED', handleFinished);
+    socket.on('TRANSCRIPTION_FAILED', handleFailed);
+
+    // Subscribe to each file channel
+    audioFiles.forEach(file => {
+      socket.subscribe(`audio:${file.id}`);
+    });
+
+    return () => {
+      socket.off('TRANSCRIPTION_STARTED', handleProgress);
+      socket.off('TRANSCRIPTION_PROGRESS', handleProgress);
+      socket.off('TRANSCRIPTION_FINISHED', handleFinished);
+      socket.off('TRANSCRIPTION_FAILED', handleFailed);
+      
+      audioFiles.forEach(file => {
+        socket.unsubscribe(`audio:${file.id}`);
+      });
+    };
+  }, [socket, audioFiles, queryClient]);
+
 
   return (
     <div>

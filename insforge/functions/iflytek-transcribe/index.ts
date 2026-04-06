@@ -37,11 +37,11 @@ async function buildSignature(origin: string, secret: string): Promise<string> {
 
   const signature = await crypto.subtle.sign('HMAC', key, originData);
   const sigBytes = new Uint8Array(signature);
-  let sigBinary = '';
+  let binary = '';
   for (let i = 0; i < sigBytes.byteLength; i++) {
-    sigBinary += String.fromCharCode(sigBytes[i]);
+    binary += String.fromCharCode(sigBytes[i]);
   }
-  return btoa(sigBinary);
+  return btoa(binary);
 }
 
 async function createIFlyTekAuthUrl(): Promise<string> {
@@ -51,6 +51,7 @@ async function createIFlyTekAuthUrl(): Promise<string> {
 
   const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
   const signatureSha = await buildSignature(signatureOrigin, IFLYTEK_API_SECRET);
+  
   const authorizationOrigin = `api_key="${IFLYTEK_API_KEY}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
   const authorization = btoa(authorizationOrigin);
 
@@ -63,69 +64,129 @@ async function createIFlyTekAuthUrl(): Promise<string> {
   return `wss://${host}${path}?${params}`;
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
+/**
+ * Encode a Uint8Array to base64 safely (handles large buffers without stack overflow).
+ */
+function uint8ToBase64(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
 }
 
-async function transcribeWithIFLyTek(audioBuffer: ArrayBuffer): Promise<string> {
-  const baseUrl = 'api.xfyun.cn';
-  const path = '/v1/service/v1/iat';
-  const date = new Date().toUTCString();
+/**
+ * iFlytek WebSocket v2 expects raw PCM frames.
+ * The frontend already sends pure s16le PCM (no WAV/RIFF header).
+ * We chunk into 1280-byte frames (~40ms at 16kHz/mono/16-bit).
+ */
+const FRAME_SIZE = 1280;
 
-  const signatureOrigin = `host: ${baseUrl}\ndate: ${date}\nGET ${path} HTTP/1.1`;
-  const signatureSha = await buildSignature(signatureOrigin, IFLYTEK_API_SECRET);
-  const authorizationOrigin = `api_key="${IFLYTEK_API_KEY}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
-  const authorization = btoa(authorizationOrigin);
+async function transcribeWithIFLyTek(audioBuffer: ArrayBuffer, onProgress?: (text: string) => void): Promise<string> {
+  const authUrl = await createIFlyTekAuthUrl();
+  const socket = new WebSocket(authUrl);
+  const pcmData = new Uint8Array(audioBuffer);
 
-  const audioBase64 = arrayBufferToBase64(audioBuffer);
+  return new Promise((resolve, reject) => {
+    let resultText = '';
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error('Transcription timed out'));
+    }, 120000); // 2 min timeout for long audio
 
-  const param = {
-    engine_type: 'sms16k',
-    language: 'en_us',
-    accent: 'mandarin',
-    audio_format: 'wav',
-    sample_rate: '16000',
-    webflag: 1,
-  };
-  const paramBase64 = arrayBufferToBase64(new TextEncoder().encode(JSON.stringify(param)).buffer);
+    socket.onopen = () => {
+      // First frame: includes config + first audio chunk
+      const firstChunk = pcmData.slice(0, FRAME_SIZE);
+      const firstFrame = {
+        common: { app_id: IFLYTEK_APP_ID },
+        business: {
+          language: 'en_us',
+          domain: 'iat',
+          accent: 'mandarin',
+          vinfo: 1,
+        },
+        data: {
+          status: 0,
+          format: 'audio/L16;rate=16000',
+          encoding: 'raw',
+          audio: uint8ToBase64(firstChunk),
+        },
+      };
+      socket.send(JSON.stringify(firstFrame));
 
-  const formData = new FormData();
-  formData.append('audio', new Blob([audioBuffer]));
-  formData.append('format', 'wav');
-  formData.append('rate', '16000');
-  formData.append('engine_type', 'sms16k');
-  formData.append('lang', 'en_us');
-  formData.append('accent', 'mandarin');
-  formData.append('appid', IFLYTEK_APP_ID);
-  formData.append('api_key', IFLYTEK_API_KEY);
-  formData.append('ts', Math.floor(Date.now() / 1000).toString());
-  formData.append('sign', signatureSha);
-  formData.append('param', paramBase64);
+      // Send remaining audio in FRAME_SIZE chunks
+      let offset = FRAME_SIZE;
+      const sendNext = () => {
+        // Send up to 5 frames per tick to maintain flow without flooding
+        let sent = 0;
+        while (offset < pcmData.length && sent < 5) {
+          const end = Math.min(offset + FRAME_SIZE, pcmData.length);
+          const isLast = end >= pcmData.length;
+          const chunk = pcmData.slice(offset, end);
 
-  const response = await fetch(`https://${baseUrl}${path}`, {
-    method: 'POST',
-    body: formData,
+          const frame = {
+            data: {
+              status: isLast ? 2 : 1,
+              format: 'audio/L16;rate=16000',
+              encoding: 'raw',
+              audio: uint8ToBase64(chunk),
+            },
+          };
+          socket.send(JSON.stringify(frame));
+          offset = end;
+          sent++;
+
+          if (isLast) return; // Done sending
+        }
+
+        if (offset < pcmData.length) {
+          setTimeout(sendNext, 40); // ~40ms interval matches real-time 16kHz audio rate
+        }
+      };
+
+      // Start streaming after a brief delay to let the server process the first frame
+      setTimeout(sendNext, 40);
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.code !== 0) {
+        clearTimeout(timeout);
+        socket.close();
+        reject(new Error(`iFlytek Error: ${data.message} (code ${data.code})`));
+        return;
+      }
+
+      if (data.data && data.data.result) {
+        const ws = data.data.result.ws;
+        let frameText = '';
+        for (const item of ws) {
+          for (const cw of item.cw) {
+            frameText += cw.w;
+          }
+        }
+        resultText += frameText;
+        onProgress?.(resultText);
+
+        if (data.data.status === 2) {
+          clearTimeout(timeout);
+          socket.close();
+          resolve(resultText);
+        }
+      }
+    };
+
+    socket.onerror = (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    };
+
+    socket.onclose = () => {
+      clearTimeout(timeout);
+      resolve(resultText);
+    };
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`iFLYTEK API error: ${response.status} - ${errorText}`);
-  }
-
-  const result = await response.json();
-
-  if (result.code !== 0) {
-    throw new Error(`iFLYTEK error: ${result.desc} (code: ${result.code})`);
-  }
-
-  return result.data.result.ws
-    .map((s: { cw: { w: string }[] }) => s.cw.map((w: { w: string }) => w.w).join(''))
-    .join(' ');
 }
 
 function buildStyleGuidePrompt(rules: StyleGuideRule[]): string {
@@ -191,6 +252,8 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
+  const client = createClient({ baseUrl, anonKey });
+
   if (req.method === 'POST') {
     try {
       const body = (await req.json()) as TranscribeRequest;
@@ -203,7 +266,11 @@ export default async function handler(req: Request): Promise<Response> {
         });
       }
 
-      const client = createClient({ baseUrl, anonKey });
+      // Notify transcription started
+      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STARTED', { 
+        audioFileId,
+        provider 
+      });
 
       await client.database
         .from('audio_files')
@@ -245,22 +312,22 @@ export default async function handler(req: Request): Promise<Response> {
       let transcription: Record<string, unknown> = {};
 
       if (provider === 'iflytek') {
-        if (!openAiKey && (!IFLYTEK_APP_ID || !IFLYTEK_API_KEY || !IFLYTEK_API_SECRET)) {
-          return new Response(JSON.stringify({ error: 'iFLYTEK credentials not configured' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+        if (!IFLYTEK_APP_ID || !IFLYTEK_API_KEY || !IFLYTEK_API_SECRET) {
+          throw new Error('iFLYTEK credentials not configured');
         }
 
-        const iflytekResult = await transcribeWithIFLyTek(audioBuffer);
+        const iflytekResult = await transcribeWithIFLyTek(audioBuffer, async (text) => {
+          // Send partial results via realtime
+          await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_PROGRESS', {
+            audioFileId,
+            text
+          });
+        });
         rawText = iflytekResult;
         transcription = { text: rawText, provider: 'iflytek' };
       } else {
         if (!openAiKey) {
-          return new Response(JSON.stringify({ error: 'OpenAI API key not configured' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          throw new Error('OpenAI API key not configured');
         }
 
         const formData = new FormData();
@@ -271,38 +338,24 @@ export default async function handler(req: Request): Promise<Response> {
 
         const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${openAiKey}`,
-          },
+          headers: { Authorization: `Bearer ${openAiKey}` },
           body: formData,
         });
 
         if (!whisperResponse.ok) {
           const errorText = await whisperResponse.text();
-          console.error('Whisper API error:', errorText);
-          await client.database
-            .from('audio_files')
-            .update({ transcription_status: 'failed' })
-            .eq('id', audioFileId);
-          return new Response(
-            JSON.stringify({ error: 'Whisper transcription failed', details: errorText }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
+          throw new Error(`Whisper transcription failed: ${errorText}`);
         }
 
         transcription = await whisperResponse.json();
-
-        if (transcription.text) {
-          rawText = transcription.text as string;
-        } else if (transcription.segments) {
-          rawText = (transcription.segments as Array<{ speaker?: string; text: string }>)
-            .map((seg) => {
-              const speaker = seg.speaker ? `${seg.speaker}: ` : '';
-              return `${speaker}${seg.text}`;
-            })
-            .join('\n');
-        }
+        rawText = (transcription.text as string) || '';
       }
+
+      // Notify transcription completed raw
+      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_RAW_COMPLETED', {
+        audioFileId,
+        text: rawText
+      });
 
       const { data: activeGuide } = await client.database
         .from('style_guides')
@@ -319,7 +372,7 @@ export default async function handler(req: Request): Promise<Response> {
           .eq('is_active', true);
 
         if (rules && rules.length > 0) {
-          console.log('Applying style guide rules:', rules.length);
+          await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STYLING', { audioFileId });
           formattedText = await applyStyleGuide(client, rawText, rules as StyleGuideRule[]);
         }
       }
@@ -335,11 +388,8 @@ export default async function handler(req: Request): Promise<Response> {
         },
         status: 'completed',
         completed_at: new Date().toISOString(),
+        full_text: formattedText
       };
-
-      if (formattedText) {
-        transcriptData.full_text = formattedText;
-      }
 
       const { data: transcript, error: insertError } = await client.database
         .from('transcripts')
@@ -347,16 +397,7 @@ export default async function handler(req: Request): Promise<Response> {
         .select()
         .single();
 
-      if (insertError) {
-        console.error('Failed to save transcript:', insertError);
-        return new Response(
-          JSON.stringify({
-            error: 'Transcription succeeded but failed to save',
-            transcription,
-          }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
+      if (insertError) throw insertError;
 
       await client.database
         .from('audio_files')
@@ -366,19 +407,39 @@ export default async function handler(req: Request): Promise<Response> {
         })
         .eq('id', audioFileId);
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          transcript,
-          transcription,
-          formatted: formattedText,
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+      // Final notification
+      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_FINISHED', {
+        audioFileId,
+        transcriptId: transcript.id,
+        text: formattedText
+      });
+
+      return new Response(JSON.stringify({ success: true, transcript }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       console.error('Transcription error:', error);
+      
+      // Notify failure
+      try {
+        const body = (await req.clone().json()) as TranscribeRequest;
+        if (body.audioFileId) {
+          await client.realtime.publish(`audio:${body.audioFileId}`, 'TRANSCRIPTION_FAILED', {
+            audioFileId: body.audioFileId,
+            error: String(error)
+          });
+          await client.database
+            .from('audio_files')
+            .update({ transcription_status: 'failed' })
+            .eq('id', body.audioFileId);
+        }
+      } catch (e) {
+        console.error('Failed to notify error:', e);
+      }
+
       return new Response(
-        JSON.stringify({ error: 'Internal server error', details: String(error) }),
+        JSON.stringify({ error: 'Transcription failed', details: String(error) }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -389,3 +450,4 @@ export default async function handler(req: Request): Promise<Response> {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
+

@@ -6,6 +6,7 @@ export enum AudioStatus {
 }
 
 export enum Role {
+  USER = 'USER',
   ADMIN = 'ADMIN',
   TRANSCRIPTIONIST = 'TRANSCRIPTIONIST',
 }

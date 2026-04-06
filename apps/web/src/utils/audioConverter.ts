@@ -192,15 +192,17 @@ export async function convertToPCM16kHz(file: File, options: ConvertOptions = {}
 
   const inputExt = getExtension(file.type, file.name);
   const inputName = `input.${inputExt}`;
-  const outputName = 'output.wav';
+  const outputName = 'output.pcm';
 
   await ffmpeg.writeFile(inputName, await fetchFile(file));
 
+  // Output raw PCM: signed 16-bit little-endian, mono, 16kHz
+  // -f s16le produces a headerless PCM stream (no WAV/RIFF wrapper)
   await ffmpeg.exec([
     '-i',
     inputName,
-    '-acodec',
-    'pcm_s16le',
+    '-f',
+    's16le',
     '-ar',
     '16000',
     '-ac',
@@ -214,7 +216,9 @@ export async function convertToPCM16kHz(file: File, options: ConvertOptions = {}
   await ffmpeg.deleteFile(inputName);
   await ffmpeg.deleteFile(outputName);
 
-  return new Blob([new Uint8Array(Array.from(data as Uint8Array))], { type: 'audio/wav' });
+  return new Blob([new Uint8Array(Array.from(data as Uint8Array))], {
+    type: 'audio/L16;rate=16000',
+  });
 }
 
 export async function getAudioDuration(file: File): Promise<number> {

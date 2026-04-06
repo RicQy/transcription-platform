@@ -22,13 +22,11 @@
     "@tiptap/react": "^2.4.0",
     "@tiptap/starter-kit": "^2.4.0",
     "@transcribe/shared-types": "workspace:*",
-    "axios": "^1.7.2",
     "docx": "^8.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.51.5",
     "react-router-dom": "^6.23.1",
-    "socket.io-client": "^4.7.5",
     "wavesurfer.js": "^7.7.11",
     "zod": "^3.23.8",
     "zustand": "^4.5.2"
