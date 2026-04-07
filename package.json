@@ -8,6 +8,7 @@
     "pnpm": ">=8"
   },
   "scripts": {
+    "dev": "pnpm -r --parallel dev",
     "lint": "eslint --ext .ts,.tsx apps/web/src apps/api/src packages/shared-types/src",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

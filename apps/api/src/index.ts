@@ -153,6 +153,7 @@ app.post('/style-guides', authenticate, upload.single('file'), async (req: any, 
   }
 });
 
+app.post('/transcribe', authenticate, async (req: any, res) => {
   const { audioFileId, provider = 'whisperx' } = req.body;
   if (!audioFileId) return res.status(400).json({ error: 'Missing audioFileId' });
 
