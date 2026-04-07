@@ -121,10 +121,10 @@ export function useTranscribeAudio() {
   return useMutation({
     mutationFn: async ({
       audioFileId,
-      provider = 'iflytek',
+      provider = 'whisperx',
     }: {
       audioFileId: string;
-      provider?: 'openai' | 'iflytek';
+      provider?: 'openai' | 'iflytek' | 'whisperx';
     }) => {
       const response = await fetch('/api/transcribe', {
         method: 'POST',

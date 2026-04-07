@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { createClient } from '@insforge/sdk';
 import { enforce } from '@transcribe/cvl-engine';
 import { v4 as uuidv4 } from 'uuid';
+import Replicate from 'replicate';
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ app.use(morgan('dev'));
 
 interface TranscribeRequest {
   audioFileId: string;
-  provider?: 'openai' | 'iflytek';
+  provider?: 'openai' | 'iflytek' | 'whisperx';
   useDiarization?: boolean;
 }
 
@@ -36,7 +37,7 @@ app.get('/health', (req, res) => {
 
 // ─── Transcription Endpoint ───────────────────────────────────────────────────
 app.post('/transcribe', async (req, res) => {
-  const { audioFileId, provider = 'openai', useDiarization = true } = req.body as TranscribeRequest;
+  const { audioFileId, provider = 'whisperx', useDiarization = true } = req.body as TranscribeRequest;
 
   if (!audioFileId) {
     return res.status(400).json({ error: 'Missing required field: audioFileId' });
@@ -99,6 +100,11 @@ const IFLYTEK_APP_ID = process.env.IFLYTEK_APP_ID || '';
 const IFLYTEK_API_KEY = process.env.IFLYTEK_API_KEY || '';
 const IFLYTEK_API_SECRET = process.env.IFLYTEK_API_SECRET || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN || '';
+
+const replicate = new Replicate({
+  auth: REPLICATE_API_TOKEN,
+});
 
 function buildSignature(origin: string, secret: string): string {
   const hmac = crypto.createHmac('sha256', secret);
@@ -288,13 +294,38 @@ async function transcribeAsync(
     if (!response.ok) throw new Error('Failed to fetch audio from storage');
     const audioBuffer = await response.arrayBuffer();
 
-    // Stage 2: ASR Layer (Whisper / iFlytek)
+    // Stage 2: ASR Layer (Whisper / iFlytek / WhisperX)
     await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_PROGRESS', { status: 'asr_active' });
     
     let rawText = '';
     let transcriptionData: Record<string, unknown> = {};
 
-    if (provider === 'iflytek') {
+    if (provider === 'whisperx') {
+      if (!REPLICATE_API_TOKEN) throw new Error('Replicate API key missing');
+
+      const output = await replicate.run(
+        "victor-upmeet/whisperx:84d2627e7d68a98f1f5035fcd7a31b67f1b74d47cbaf0effda9930fca56ec483",
+        {
+          input: {
+            audio: storageUrl,
+            batch_size: 64,
+            align_output: true,
+            debug: false
+          }
+        }
+      );
+      
+      transcriptionData = output as Record<string, unknown>;
+      rawText = "";
+      // Handle the object structure from victor-upmeet/whisperx
+      const segments = Array.isArray(transcriptionData) ? transcriptionData : transcriptionData.segments;
+      if (Array.isArray(segments)) {
+         rawText = segments.map((s: any) => s.text).join(' ');
+      } else if (transcriptionData.text) {
+         rawText = String(transcriptionData.text);
+      }
+
+    } else if (provider === 'iflytek') {
       if (!IFLYTEK_APP_ID || !IFLYTEK_API_KEY || !IFLYTEK_API_SECRET) {
         throw new Error('iFLYTEK credentials not configured');
       }
