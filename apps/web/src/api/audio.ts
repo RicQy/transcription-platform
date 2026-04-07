@@ -126,20 +126,17 @@ export function useTranscribeAudio() {
       audioFileId: string;
       provider?: 'openai' | 'iflytek';
     }) => {
-      const response = await fetch(
-        `${import.meta.env.VITE_INSFORGE_URL}/functions/iflytek-transcribe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            audioFileId,
-            useDiarization: true,
-            provider,
-          }),
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+        body: JSON.stringify({
+          audioFileId,
+          useDiarization: true,
+          provider,
+        }),
+      });
 
       if (!response.ok) {
         const error = await response.json();

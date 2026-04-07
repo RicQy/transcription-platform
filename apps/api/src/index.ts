@@ -85,9 +85,196 @@ app.post('/transcribe', async (req, res) => {
   }
 });
 
+import crypto from 'crypto';
+import WebSocket from 'ws';
+import FormData from 'form-data';
+import fetch from 'node-fetch'; // using node-fetch if global fetch is not available or just use global fetch if node > 18
+
+interface StyleGuideRule {
+  rule_type: string;
+  rule_text: string;
+}
+
+const IFLYTEK_APP_ID = process.env.IFLYTEK_APP_ID || '';
+const IFLYTEK_API_KEY = process.env.IFLYTEK_API_KEY || '';
+const IFLYTEK_API_SECRET = process.env.IFLYTEK_API_SECRET || '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+
+function buildSignature(origin: string, secret: string): string {
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(origin);
+  return hmac.digest('base64');
+}
+
+function createIFlyTekAuthUrl(): string {
+  const host = 'iat-api-sg.xf-yun.com';
+  const path = '/v2/iat';
+  const date = new Date().toUTCString();
+
+  const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
+  const signatureSha = buildSignature(signatureOrigin, IFLYTEK_API_SECRET);
+  
+  const authorizationOrigin = `api_key="${IFLYTEK_API_KEY}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
+  const authorization = Buffer.from(authorizationOrigin).toString('base64');
+
+  const params = new URLSearchParams({
+    authorization,
+    date,
+    host,
+  });
+
+  return `wss://${host}${path}?${params}`;
+}
+
+const FRAME_SIZE = 1280;
+
+async function transcribeWithIFLyTek(audioBuffer: ArrayBuffer, onProgress?: (text: string) => void): Promise<string> {
+  const authUrl = createIFlyTekAuthUrl();
+  const socket = new WebSocket(authUrl);
+  const pcmData = Buffer.from(audioBuffer);
+
+  return new Promise((resolve, reject) => {
+    let resultText = '';
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error('Transcription timed out'));
+    }, 120000); 
+
+    socket.on('open', () => {
+      const firstChunk = pcmData.subarray(0, FRAME_SIZE);
+      const firstFrame = {
+        common: { app_id: IFLYTEK_APP_ID },
+        business: {
+          language: 'en_us',
+          domain: 'iat',
+          accent: 'mandarin',
+          vinfo: 1,
+        },
+        data: {
+          status: 0,
+          format: 'audio/L16;rate=16000',
+          encoding: 'raw',
+          audio: firstChunk.toString('base64'),
+        },
+      };
+      socket.send(JSON.stringify(firstFrame));
+
+      let offset = FRAME_SIZE;
+      const sendNext = () => {
+        let sent = 0;
+        while (offset < pcmData.length && sent < 5) {
+          const end = Math.min(offset + FRAME_SIZE, pcmData.length);
+          const isLast = end >= pcmData.length;
+          const chunk = pcmData.subarray(offset, end);
+
+          const frame = {
+            data: {
+              status: isLast ? 2 : 1,
+              format: 'audio/L16;rate=16000',
+              encoding: 'raw',
+              audio: chunk.toString('base64'),
+            },
+          };
+          socket.send(JSON.stringify(frame));
+          offset = end;
+          sent++;
+
+          if (isLast) return; 
+        }
+
+        if (offset < pcmData.length) {
+          setTimeout(sendNext, 40); 
+        }
+      };
+
+      setTimeout(sendNext, 40);
+    });
+
+    socket.on('message', (dataRaw: WebSocket.Data) => {
+      const data = JSON.parse(dataRaw.toString());
+      if (data.code !== 0) {
+        clearTimeout(timeout);
+        socket.close();
+        reject(new Error(`iFlytek Error: ${data.message} (code ${data.code})`));
+        return;
+      }
+
+      if (data.data && data.data.result) {
+        const wsData = data.data.result.ws;
+        let frameText = '';
+        for (const item of wsData) {
+          for (const cw of item.cw) {
+            frameText += cw.w;
+          }
+        }
+        resultText += frameText;
+        onProgress?.(resultText);
+
+        if (data.data.status === 2) {
+          clearTimeout(timeout);
+          socket.close();
+          resolve(resultText);
+        }
+      }
+    });
+
+    socket.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+
+    socket.on('close', () => {
+      clearTimeout(timeout);
+      resolve(resultText);
+    });
+  });
+}
+
+function buildStyleGuidePrompt(rules: StyleGuideRule[]): string {
+  if (!rules || rules.length === 0) {
+    return 'Apply standard legal transcription formatting.';
+  }
+
+  const rulesText = rules.map((r) => `- ${r.rule_type}: ${r.rule_text}`).join('\n');
+
+  return `You are a legal transcription editor. Format the following transcript strictly according to these style guide rules:
+
+${rulesText}
+
+IMPORTANT:
+1. Apply ALL rules consistently throughout the transcript
+2. If the transcript contains speaker labels, ensure they follow the SpeakerFormatting rule
+3. Remove filler words (um, uh, er, etc.) unless the FillerWordHandling rule says otherwise
+4. Use proper punctuation according to PunctuationConvention
+5. Maintain the original meaning while applying formatting rules
+6. Return ONLY the formatted transcript, no explanations`;
+}
+
+async function applyStyleGuide(
+  transcription: string,
+  rules: StyleGuideRule[],
+): Promise<string> {
+  const prompt = buildStyleGuidePrompt(rules);
+
+  const completion = await client.ai.chat.completions.create({
+    model: 'anthropic/claude-sonnet-4.5',
+    messages: [
+      {
+        role: 'user',
+        content: `${prompt}\n\nTranscript to format:\n\n${transcription}`,
+      },
+    ],
+    temperature: 0.3,
+    maxTokens: 8000,
+  });
+
+  const formattedText = completion.choices[0]?.message?.content?.trim();
+  return formattedText || transcription;
+}
+
 /**
  * Background transcription worker.
- * Orchestrates: ASR (Whisper) -> LLM (Claude) -> CVL (Deterministic)
+ * Orchestrates: ASR (Whisper/iFlytek) -> LLM (Claude) -> CVL (Deterministic)
  */
 async function transcribeAsync(
   audioFileId: string,
@@ -101,16 +288,79 @@ async function transcribeAsync(
     if (!response.ok) throw new Error('Failed to fetch audio from storage');
     const audioBuffer = await response.arrayBuffer();
 
-    // Stage 2: ASR Layer (Placeholder for WhisperX)
+    // Stage 2: ASR Layer (Whisper / iFlytek)
     await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_PROGRESS', { status: 'asr_active' });
     
-    let rawText = "Initial transcription text placeholder.";
-    // TODO: Implement actual WhisperX local call or containerization here
-    // Currently using mock/API fallback until WhisperX worker is configured
+    let rawText = '';
+    let transcriptionData: Record<string, unknown> = {};
+
+    if (provider === 'iflytek') {
+      if (!IFLYTEK_APP_ID || !IFLYTEK_API_KEY || !IFLYTEK_API_SECRET) {
+        throw new Error('iFLYTEK credentials not configured');
+      }
+
+      rawText = await transcribeWithIFLyTek(audioBuffer, (text) => {
+        client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_PROGRESS', {
+          audioFileId,
+          text,
+        });
+      });
+      transcriptionData = { text: rawText, provider: 'iflytek' };
+    } else {
+      if (!OPENAI_API_KEY) {
+        throw new Error('OpenAI API key not configured');
+      }
+
+      const formData = new FormData();
+      const buffer = Buffer.from(audioBuffer);
+      formData.append('file', buffer, { filename: 'audio.mp3', contentType: 'audio/mpeg' });
+      formData.append('model', 'gpt-4o-transcribe-diarize');
+      formData.append('response_format', useDiarization ? 'diarized_json' : 'verbose_json');
+
+      const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          // @ts-ignore
+          ...formData.getHeaders()
+        },
+        body: formData as any, // type assertion needed for node-fetch compatibility
+      });
+
+      if (!whisperResponse.ok) {
+        const errorText = await whisperResponse.text();
+        throw new Error(`Whisper transcription failed: ${errorText}`);
+      }
+
+      transcriptionData = await whisperResponse.json() as Record<string, unknown>;
+      rawText = (transcriptionData.text as string) || '';
+    }
+
+    await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_RAW_COMPLETED', {
+      audioFileId,
+      text: rawText,
+    });
 
     // Stage 3: LLM Layer (Claude Opus for Readability)
-    await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STYLING', { audioFileId });
-    let llmCleanedText = rawText; // TODO: Port applyStyleGuide logic here
+    const { data: activeGuide } = await client.database
+      .from('style_guides')
+      .select('id')
+      .eq('is_active', true)
+      .single();
+
+    let llmCleanedText = rawText;
+    if (activeGuide) {
+      const { data: rules } = await client.database
+        .from('style_guide_rules')
+        .select('rule_type, rule_text')
+        .eq('guide_id', activeGuide.id)
+        .eq('is_active', true);
+
+      if (rules && rules.length > 0) {
+        await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STYLING', { audioFileId });
+        llmCleanedText = await applyStyleGuide(rawText, rules as StyleGuideRule[]);
+      }
+    }
 
     // Stage 4: CVL Engine Layer (Deterministic Enforcement)
     await client.realtime.publish(`audio:${audioFileId}`, 'CVL_ENFORCEMENT', { audioFileId });
@@ -122,10 +372,13 @@ async function transcribeAsync(
       .from('transcripts')
       .insert([{
         audio_file_id: audioFileId,
+        style_guide_id: activeGuide?.id || null,
+        raw_transcription: JSON.stringify(transcriptionData),
         content: {
           raw: rawText,
           llm_cleaned: llmCleanedText,
           formatted: formattedText,
+          applied_style_guide: activeGuide?.id || null,
           cvl_score: cvlResult.score,
           cvl_violations_count: cvlResult.violations.length,
           cvl_stats: cvlResult.stats,
