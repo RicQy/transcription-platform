@@ -1,5 +1,7 @@
 /// <reference path="./deno.d.ts" />
 import { createClient } from 'npm:@insforge/sdk';
+import { enforce } from './cvl-engine.ts';
+import type { CVLResult } from './cvl-engine.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -300,14 +302,14 @@ async function transcribeAsync(
       text: rawText,
     });
 
-    // Apply style guide if one is active
+    // ─── Layer 2: LLM Light Cleanup (readability) ─────────────────────────
     const { data: activeGuide } = await client.database
       .from('style_guides')
       .select('id')
       .eq('is_active', true)
       .single();
 
-    let formattedText = rawText;
+    let llmCleanedText = rawText;
     if (activeGuide) {
       const { data: rules } = await client.database
         .from('style_guide_rules')
@@ -317,19 +319,30 @@ async function transcribeAsync(
 
       if (rules && rules.length > 0) {
         await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STYLING', { audioFileId });
-        formattedText = await applyStyleGuide(client, rawText, rules as StyleGuideRule[]);
+        llmCleanedText = await applyStyleGuide(client, rawText, rules as StyleGuideRule[]);
       }
     }
 
-    // Persist transcript
+    // ─── Layer 3: CVL Rule Engine (deterministic compliance) ─────────────
+    await client.realtime.publish(`audio:${audioFileId}`, 'CVL_ENFORCEMENT', { audioFileId });
+    const cvlResult: CVLResult = enforce(llmCleanedText);
+    const formattedText = cvlResult.text;
+
+    console.log(`CVL Engine: score=${cvlResult.score}, violations=${cvlResult.violations.length}`, cvlResult.stats);
+
+    // Persist transcript with CVL metadata
     const transcriptData: Record<string, unknown> = {
       audio_file_id: audioFileId,
       style_guide_id: activeGuide?.id || null,
       raw_transcription: JSON.stringify(transcription),
       content: {
         raw: rawText,
+        llm_cleaned: llmCleanedText,
         formatted: formattedText,
         applied_style_guide: activeGuide?.id || null,
+        cvl_score: cvlResult.score,
+        cvl_violations_count: cvlResult.violations.length,
+        cvl_stats: cvlResult.stats,
       },
       status: 'completed',
       completed_at: new Date().toISOString(),
