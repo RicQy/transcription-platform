@@ -1,30 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { insforge } from './insforge';
+import { getApiUrl } from './config';
 
 export const AUDIO_QUERY_KEY = ['audio'] as const;
 
 export interface AudioFileDto {
   id: string;
   filename: string;
-  storage_key: string;
   storage_url: string;
-  duration: number | null;
-  status: string;
   transcription_status?: string;
   transcript_id?: string;
   created_at: string;
 }
 
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Authorization': `Bearer ${token}`,
+  };
+};
+
 export function useAudioList() {
   return useQuery({
     queryKey: AUDIO_QUERY_KEY,
     queryFn: async () => {
-      const { data, error } = await insforge.database
-        .from('audio_files')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as AudioFileDto[];
+      const response = await fetch(getApiUrl('/audio-files'), { headers: getHeaders() });
+      if (!response.ok) throw new Error('Failed to fetch audio list');
+      return response.json() as Promise<AudioFileDto[]>;
     },
     refetchInterval: 5000,
   });
@@ -34,55 +35,38 @@ export function useAudio(id: string) {
   return useQuery({
     queryKey: [...AUDIO_QUERY_KEY, id],
     queryFn: async () => {
-      const { data, error } = await insforge.database
-        .from('audio_files')
-        .select('*')
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      return data as AudioFileDto;
+      const response = await fetch(getApiUrl(`/audio-files/${id}`), { headers: getHeaders() });
+      if (!response.ok) throw new Error('Failed to fetch audio file');
+      return response.json() as Promise<AudioFileDto>;
     },
     enabled: !!id,
   });
 }
 
-export function streamAudioUrl(storageUrl: string): string {
-  return storageUrl;
-}
-
 export interface UploadAudioParams {
   file: File;
-  onProgress?: (percent: number) => void;
 }
 
 export function useUploadAudio() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, onProgress }: UploadAudioParams) => {
-      const key = `audio/${Date.now()}-${file.name}`;
+    mutationFn: async ({ file }: UploadAudioParams) => {
+      const formData = new FormData();
+      formData.append('file', file);
 
-      const { data: uploadData, error: uploadError } = await insforge.storage.from('audio-files').upload(key, file);
+      const response = await fetch(getApiUrl('/upload'), {
+        method: 'POST',
+        headers: getHeaders(),
+        body: formData,
+      });
 
-      if (uploadError) throw uploadError;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
 
-      const url = uploadData?.url || insforge.storage.from('audio-files').getPublicUrl(key);
-
-      const { data: dbData, error: dbError } = await insforge.database
-        .from('audio_files')
-        .insert([
-          {
-            filename: file.name,
-            storage_key: key,
-            storage_url: url,
-            status: 'UPLOADED',
-          },
-        ])
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-      return dbData as AudioFileDto;
+      return response.json() as Promise<AudioFileDto>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUDIO_QUERY_KEY });
@@ -95,19 +79,11 @@ export function useDeleteAudio() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: audio } = await insforge.database
-        .from('audio_files')
-        .select('storage_key')
-        .eq('id', id)
-        .single();
-
-      if (audio?.storage_key) {
-        await insforge.storage.from('audio-files').remove(audio.storage_key);
-      }
-
-      const { error } = await insforge.database.from('audio_files').delete().eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(getApiUrl(`/audio-files/${id}`), {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Delete failed');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUDIO_QUERY_KEY });
@@ -126,14 +102,14 @@ export function useTranscribeAudio() {
       audioFileId: string;
       provider?: 'openai' | 'iflytek' | 'whisperx';
     }) => {
-      const response = await fetch('/api/transcribe', {
+      const response = await fetch(getApiUrl('/transcribe'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getHeaders(),
         },
         body: JSON.stringify({
           audioFileId,
-          useDiarization: true,
           provider,
         }),
       });
@@ -143,8 +119,6 @@ export function useTranscribeAudio() {
         throw new Error(error.error || 'Transcription failed');
       }
 
-      // Edge Function returns 202 Accepted — transcription runs in background
-      // Frontend should track progress via realtime subscriptions
       return response.json() as Promise<{ status: string; audioFileId: string }>;
     },
     onSuccess: () => {

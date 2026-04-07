@@ -1,8 +1,16 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { insforge } from '../api/insforge';
+import { getApiUrl } from '../api/config';
 import { useAudio } from '../api/audio';
+
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -153,17 +161,14 @@ export default function TranscriptEditorPage() {
     if (!id) return;
 
     const fetchTranscript = async () => {
-      const { data, error } = await insforge.database
-        .from('transcripts')
-        .select('*')
-        .eq('audio_file_id', id)
-        .single();
-
-      if (!error && data) {
-        setTranscript(data as Transcript);
-        const text =
-          (data as Transcript).content?.formatted || (data as Transcript).full_text || '';
-        setEditedText(text);
+      const response = await fetch(getApiUrl(`/transcripts/${id}`), { headers: getHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        if (data) {
+          setTranscript(data as Transcript);
+          const text = (data as Transcript).content?.formatted || (data as Transcript).full_text || '';
+          setEditedText(text);
+        }
       }
     };
 
@@ -175,9 +180,10 @@ export default function TranscriptEditorPage() {
 
     setIsSaving(true);
     try {
-      const { error } = await insforge.database
-        .from('transcripts')
-        .update({
+      const response = await fetch(getApiUrl(`/transcripts/${transcript.id}`), {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({
           full_text: editedText,
           content: transcript.content
             ? {
@@ -185,10 +191,10 @@ export default function TranscriptEditorPage() {
                 formatted: editedText,
               }
             : { raw: '', formatted: editedText },
-        })
-        .eq('id', transcript.id);
+        }),
+      });
 
-      if (!error) {
+      if (response.ok) {
         setTranscript((prev) => (prev ? { ...prev, full_text: editedText } : null));
         alert('Transcript saved successfully!');
       }

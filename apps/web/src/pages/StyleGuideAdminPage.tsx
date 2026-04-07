@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { insforge } from '../api/insforge';
+import { getApiUrl } from '../api/config';
 
-const FUNCTIONS_URL =
-  import.meta.env.VITE_FUNCTIONS_URL || 'https://yyjgv7tf.us-east.insforge.app/functions';
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Authorization': `Bearer ${token}`,
+  };
+};
 
 interface StyleGuideRule {
   id: string;
@@ -17,7 +21,6 @@ interface StyleGuideRule {
 interface StyleGuide {
   id: string;
   version: string;
-  storage_key: string;
   storage_url: string;
   is_active: boolean;
   parsed_at: string | null;
@@ -35,11 +38,8 @@ export default function StyleGuideAdminPage() {
   const { data: guides, isLoading } = useQuery<StyleGuide[]>({
     queryKey: ['style-guides'],
     queryFn: async () => {
-      const response = await fetch(`${FUNCTIONS_URL}/style-guide`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(getApiUrl('/style-guides'), {
+        headers: getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch style guides');
       return response.json();
@@ -49,29 +49,15 @@ export default function StyleGuideAdminPage() {
   const uploadMutation = useMutation({
     mutationFn: async ({ version, file }: { version: string; file: File }) => {
       setError(null);
+      
+      const formData = new FormData();
+      formData.append('version', version);
+      formData.append('file', file);
 
-      const storageKey = `style-guides/${Date.now()}-${file.name}`;
-
-      const { error: uploadError } = await insforge.storage
-        .from('style-guides')
-        .upload(storageKey, file);
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      const storageUrl = insforge.storage.from('style-guides').getPublicUrl(storageKey);
-
-      const response = await fetch(`${FUNCTIONS_URL}/style-guide`, {
+      const response = await fetch(getApiUrl('/style-guides'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version,
-          storageKey,
-          storageUrl,
-        }),
+        headers: getHeaders(),
+        body: formData,
       });
 
       if (!response.ok) {

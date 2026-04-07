@@ -1,105 +1,74 @@
 import { create } from 'zustand';
-import { insforge } from '../api/insforge';
+import { login as apiLogin, logout as apiLogout } from '../api/auth';
 import type { UserDto } from '@transcribe/shared-types';
-import { Role } from '@transcribe/shared-types';
-
-interface InsForgeUser {
-  id: string;
-  email: string;
-  createdAt: string;
-  emailVerified: boolean;
-  metadata?: {
-    role?: string;
-    is_project_admin?: boolean;
-  };
-}
 
 interface AuthState {
   user: UserDto | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  error: string | null;
-  initialize: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
+  initialCheck: () => Promise<void>;
+  login: (credentials: any) => Promise<void>;
+  signup: (credentials: any) => Promise<void>;
   logout: () => Promise<void>;
-  setUser: (user: UserDto | null) => void;
-}
-
-function mapUser(sessionUser: InsForgeUser): UserDto {
-  const metadata = sessionUser.metadata || {};
-  const isAdmin = metadata.role === 'ADMIN' || metadata.is_project_admin === true;
-
-  return {
-    id: sessionUser.id,
-    email: sessionUser.email,
-    role: isAdmin ? Role.ADMIN : Role.TRANSCRIPTIONIST,
-    createdAt: sessionUser.createdAt,
-  };
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
-  isLoading: false,
-  error: null,
+  isLoading: true,
 
-  initialize: async () => {
+  initialCheck: async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        return;
+      }
+      // Simple validation for now, could be a /me endpoint
+      set({ 
+        user: { id: 'local', email: 'user@legal.app', role: 'user' as any, createdAt: new Date().toISOString() }, 
+        isAuthenticated: true, 
+        isLoading: false 
+      });
+    } catch {
+      set({ user: null, isAuthenticated: false, isLoading: false });
+    }
+  },
+
+  login: async (credentials) => {
     set({ isLoading: true });
-    const { data } = await insforge.auth.getCurrentUser();
-    if (data?.user) {
-      set({
-        user: mapUser(data.user as InsForgeUser),
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } else {
+    try {
+      const { user, accessToken } = await apiLogin(credentials);
+      if (accessToken) localStorage.setItem('token', accessToken);
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (error) {
       set({ isLoading: false });
+      throw error;
     }
   },
 
-  login: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    const { data, error } = await insforge.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      set({ isLoading: false, error: error.message, isAuthenticated: false });
-      throw error;
-    }
-    if (data) {
-      set({
-        user: mapUser(data.user as InsForgeUser),
-        isAuthenticated: true,
-        isLoading: false,
+  signup: async (credentials) => {
+    set({ isLoading: true });
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials)
       });
-    }
-  },
-
-  signup: async (email: string, password: string, name?: string) => {
-    set({ isLoading: true, error: null });
-    const { data, error } = await insforge.auth.signUp({
-      email,
-      password,
-      name,
-    });
-    if (error) {
-      set({ isLoading: false, error: error.message });
+      if (!response.ok) throw new Error('Signup failed');
+      
+      const { user, accessToken } = await response.json();
+      if (accessToken) localStorage.setItem('token', accessToken);
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (error) {
+      set({ isLoading: false });
       throw error;
-    }
-    if (data?.requireEmailVerification) {
-      set({ isLoading: false, error: 'Please verify your email' });
     }
   },
 
   logout: async () => {
-    set({ isLoading: true });
-    await insforge.auth.signOut();
-    set({ user: null, isAuthenticated: false, isLoading: false, error: null });
-  },
-
-  setUser: (user: UserDto | null) => {
-    set({ user, isAuthenticated: user !== null });
+    await apiLogout();
+    localStorage.removeItem('token');
+    set({ user: null, isAuthenticated: false });
   },
 }));

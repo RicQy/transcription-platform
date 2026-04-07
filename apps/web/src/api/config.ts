@@ -1,5 +1,5 @@
 export const getApiBaseUrl = () => {
-  return (import.meta.env.VITE_INSFORGE_URL as string) || '';
+  return (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:3002';
 };
 
 export const getApiUrl = (path: string) => {

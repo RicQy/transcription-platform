@@ -8,7 +8,7 @@
     "pnpm": ">=8"
   },
   "scripts": {
-    "lint": "eslint --ext .ts,.tsx apps/web/src packages/shared-types/src insforge/functions",
+    "lint": "eslint --ext .ts,.tsx apps/web/src apps/api/src packages/shared-types/src",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build:web": "pnpm --filter @transcribe/shared-types build && pnpm --filter @transcribe/web build",
