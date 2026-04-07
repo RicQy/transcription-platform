@@ -141,16 +141,18 @@ export function useTranscribeAudio() {
         },
       );
 
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Transcription failed');
       }
 
-      return response.json();
+      // Edge Function returns 202 Accepted — transcription runs in background
+      // Frontend should track progress via realtime subscriptions
+      return response.json() as Promise<{ status: string; audioFileId: string }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUDIO_QUERY_KEY });
     },
   });
 }
+

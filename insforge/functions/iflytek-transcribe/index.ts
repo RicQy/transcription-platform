@@ -236,218 +236,256 @@ ${transcription}`,
   return formattedText || transcription;
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
+/**
+ * Fire-and-forget background transcription.
+ * Runs after the HTTP 202 response has already been sent.
+ * Deno Deploy keeps the isolate alive while outstanding promises exist.
+ */
+async function transcribeAsync(
+  audioFileId: string,
+  audioBuffer: ArrayBuffer,
+  provider: 'openai' | 'iflytek',
+  useDiarization: boolean,
+  client: ReturnType<typeof createClient>,
+  openAiKey: string | undefined,
+): Promise<void> {
+  try {
+    let rawText = '';
+    let transcription: Record<string, unknown> = {};
 
-  const baseUrl = Deno.env.get('INSFORGE_BASE_URL');
-  const anonKey = Deno.env.get('ANON_KEY');
-  const openAiKey = Deno.env.get('OPENAI_API_KEY');
+    if (provider === 'iflytek') {
+      if (!IFLYTEK_APP_ID || !IFLYTEK_API_KEY || !IFLYTEK_API_SECRET) {
+        throw new Error('iFLYTEK credentials not configured');
+      }
 
-  if (!baseUrl || !anonKey) {
-    return new Response(JSON.stringify({ error: 'Missing environment variables' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      const iflytekResult = await transcribeWithIFLyTek(audioBuffer, (text) => {
+        // Fire-and-forget: do NOT await inside high-frequency streaming callback
+        // Prevents backpressure from stalling the WebSocket pipeline
+        client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_PROGRESS', {
+          audioFileId,
+          text,
+        });
+      });
+      rawText = iflytekResult;
+      transcription = { text: rawText, provider: 'iflytek' };
+    } else {
+      if (!openAiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
+
+      const formData = new FormData();
+      const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+      formData.append('file', blob, 'audio.mp3');
+      formData.append('model', 'gpt-4o-transcribe-diarize');
+      formData.append('response_format', useDiarization ? 'diarized_json' : 'verbose_json');
+
+      const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${openAiKey}` },
+        body: formData,
+      });
+
+      if (!whisperResponse.ok) {
+        const errorText = await whisperResponse.text();
+        throw new Error(`Whisper transcription failed: ${errorText}`);
+      }
+
+      transcription = await whisperResponse.json();
+      rawText = (transcription.text as string) || '';
+    }
+
+    // Notify raw transcription completed
+    await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_RAW_COMPLETED', {
+      audioFileId,
+      text: rawText,
     });
-  }
 
-  const client = createClient({ baseUrl, anonKey });
+    // Apply style guide if one is active
+    const { data: activeGuide } = await client.database
+      .from('style_guides')
+      .select('id')
+      .eq('is_active', true)
+      .single();
 
-  if (req.method === 'POST') {
+    let formattedText = rawText;
+    if (activeGuide) {
+      const { data: rules } = await client.database
+        .from('style_guide_rules')
+        .select('rule_type, rule_text')
+        .eq('guide_id', activeGuide.id)
+        .eq('is_active', true);
+
+      if (rules && rules.length > 0) {
+        await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STYLING', { audioFileId });
+        formattedText = await applyStyleGuide(client, rawText, rules as StyleGuideRule[]);
+      }
+    }
+
+    // Persist transcript
+    const transcriptData: Record<string, unknown> = {
+      audio_file_id: audioFileId,
+      style_guide_id: activeGuide?.id || null,
+      raw_transcription: JSON.stringify(transcription),
+      content: {
+        raw: rawText,
+        formatted: formattedText,
+        applied_style_guide: activeGuide?.id || null,
+      },
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      full_text: formattedText,
+    };
+
+    const { data: transcript, error: insertError } = await client.database
+      .from('transcripts')
+      .insert([transcriptData])
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    await client.database
+      .from('audio_files')
+      .update({
+        transcription_status: 'completed',
+        transcript_id: transcript.id,
+      })
+      .eq('id', audioFileId);
+
+    // Final notification — frontend picks this up via realtime subscription
+    await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_FINISHED', {
+      audioFileId,
+      transcriptId: transcript.id,
+      text: formattedText,
+    });
+  } catch (error) {
+    console.error('Background transcription error:', error);
     try {
-      const body = (await req.json()) as TranscribeRequest;
-      const { audioFileId, useDiarization = true, provider = 'openai' } = body;
-
-      if (!audioFileId) {
-        return new Response(JSON.stringify({ error: 'Missing required field: audioFileId' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Notify transcription started
-      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STARTED', { 
+      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_FAILED', {
         audioFileId,
-        provider 
+        error: String(error),
       });
-
       await client.database
         .from('audio_files')
-        .update({ transcription_status: 'processing' })
+        .update({ transcription_status: 'failed' })
         .eq('id', audioFileId);
-
-      const { data: audioFile, error: fetchError } = await client.database
-        .from('audio_files')
-        .select('*')
-        .eq('id', audioFileId)
-        .single();
-
-      if (fetchError || !audioFile) {
-        return new Response(JSON.stringify({ error: 'Audio file not found' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const storageUrl = audioFile.storage_url;
-      if (!storageUrl) {
-        return new Response(JSON.stringify({ error: 'Audio file has no storage URL' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const audioResponse = await fetch(storageUrl);
-      if (!audioResponse.ok) {
-        return new Response(JSON.stringify({ error: 'Failed to download audio file' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const audioBuffer = await audioResponse.arrayBuffer();
-
-      let rawText = '';
-      let transcription: Record<string, unknown> = {};
-
-      if (provider === 'iflytek') {
-        if (!IFLYTEK_APP_ID || !IFLYTEK_API_KEY || !IFLYTEK_API_SECRET) {
-          throw new Error('iFLYTEK credentials not configured');
-        }
-
-        const iflytekResult = await transcribeWithIFLyTek(audioBuffer, async (text) => {
-          // Send partial results via realtime
-          await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_PROGRESS', {
-            audioFileId,
-            text
-          });
-        });
-        rawText = iflytekResult;
-        transcription = { text: rawText, provider: 'iflytek' };
-      } else {
-        if (!openAiKey) {
-          throw new Error('OpenAI API key not configured');
-        }
-
-        const formData = new FormData();
-        const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-        formData.append('file', blob, 'audio.mp3');
-        formData.append('model', 'gpt-4o-transcribe-diarize');
-        formData.append('response_format', useDiarization ? 'diarized_json' : 'verbose_json');
-
-        const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${openAiKey}` },
-          body: formData,
-        });
-
-        if (!whisperResponse.ok) {
-          const errorText = await whisperResponse.text();
-          throw new Error(`Whisper transcription failed: ${errorText}`);
-        }
-
-        transcription = await whisperResponse.json();
-        rawText = (transcription.text as string) || '';
-      }
-
-      // Notify transcription completed raw
-      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_RAW_COMPLETED', {
-        audioFileId,
-        text: rawText
-      });
-
-      const { data: activeGuide } = await client.database
-        .from('style_guides')
-        .select('id')
-        .eq('is_active', true)
-        .single();
-
-      let formattedText = rawText;
-      if (activeGuide) {
-        const { data: rules } = await client.database
-          .from('style_guide_rules')
-          .select('rule_type, rule_text')
-          .eq('guide_id', activeGuide.id)
-          .eq('is_active', true);
-
-        if (rules && rules.length > 0) {
-          await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STYLING', { audioFileId });
-          formattedText = await applyStyleGuide(client, rawText, rules as StyleGuideRule[]);
-        }
-      }
-
-      const transcriptData: Record<string, unknown> = {
-        audio_file_id: audioFileId,
-        style_guide_id: activeGuide?.id || null,
-        raw_transcription: JSON.stringify(transcription),
-        content: {
-          raw: rawText,
-          formatted: formattedText,
-          applied_style_guide: activeGuide?.id || null,
-        },
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        full_text: formattedText
-      };
-
-      const { data: transcript, error: insertError } = await client.database
-        .from('transcripts')
-        .insert([transcriptData])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      await client.database
-        .from('audio_files')
-        .update({
-          transcription_status: 'completed',
-          transcript_id: transcript.id,
-        })
-        .eq('id', audioFileId);
-
-      // Final notification
-      await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_FINISHED', {
-        audioFileId,
-        transcriptId: transcript.id,
-        text: formattedText
-      });
-
-      return new Response(JSON.stringify({ success: true, transcript }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      console.error('Transcription error:', error);
-      
-      // Notify failure
-      try {
-        const body = (await req.clone().json()) as TranscribeRequest;
-        if (body.audioFileId) {
-          await client.realtime.publish(`audio:${body.audioFileId}`, 'TRANSCRIPTION_FAILED', {
-            audioFileId: body.audioFileId,
-            error: String(error)
-          });
-          await client.database
-            .from('audio_files')
-            .update({ transcription_status: 'failed' })
-            .eq('id', body.audioFileId);
-        }
-      } catch (e) {
-        console.error('Failed to notify error:', e);
-      }
-
-      return new Response(
-        JSON.stringify({ error: 'Transcription failed', details: String(error) }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+    } catch (e) {
+      console.error('Failed to notify error:', e);
     }
   }
-
-  return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-    status: 405,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
 }
+
+// ─── Edge Function Entry Point ───────────────────────────────────────────────
+// InsForge expects: export default { async fetch(req) {} }
+// NOT: export default async function handler(req) {}
+
+export default {
+  async fetch(req: Request): Promise<Response> {
+    // CORS preflight
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
+    // Health check — responds instantly for InsForge MCP probes
+    if (req.method === 'GET') {
+      return new Response(
+        JSON.stringify({ status: 'ok', service: 'iflytek-transcribe' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const baseUrl = Deno.env.get('INSFORGE_BASE_URL');
+    const anonKey = Deno.env.get('ANON_KEY');
+    const openAiKey = Deno.env.get('OPENAI_API_KEY');
+
+    if (!baseUrl || !anonKey) {
+      return new Response(JSON.stringify({ error: 'Missing environment variables' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const client = createClient({ baseUrl, anonKey });
+
+    if (req.method === 'POST') {
+      try {
+        const body = (await req.json()) as TranscribeRequest;
+        const { audioFileId, useDiarization = true, provider = 'openai' } = body;
+
+        if (!audioFileId) {
+          return new Response(JSON.stringify({ error: 'Missing required field: audioFileId' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Mark as processing (lightweight DB writes — fast)
+        await client.realtime.publish(`audio:${audioFileId}`, 'TRANSCRIPTION_STARTED', {
+          audioFileId,
+          provider,
+        });
+
+        await client.database
+          .from('audio_files')
+          .update({ transcription_status: 'processing' })
+          .eq('id', audioFileId);
+
+        // Validate audio file exists
+        const { data: audioFile, error: fetchError } = await client.database
+          .from('audio_files')
+          .select('*')
+          .eq('id', audioFileId)
+          .single();
+
+        if (fetchError || !audioFile) {
+          return new Response(JSON.stringify({ error: 'Audio file not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const storageUrl = audioFile.storage_url;
+        if (!storageUrl) {
+          return new Response(JSON.stringify({ error: 'Audio file has no storage URL' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Download audio buffer (needed before we can fire-and-forget)
+        const audioResponse = await fetch(storageUrl);
+        if (!audioResponse.ok) {
+          return new Response(JSON.stringify({ error: 'Failed to download audio file' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const audioBuffer = await audioResponse.arrayBuffer();
+
+        // 🔥 Fire-and-forget: kick off transcription in the background
+        // Do NOT await — return 202 immediately so health checks never stall
+        // Deno Deploy keeps the isolate alive while this promise is pending
+        transcribeAsync(audioFileId, audioBuffer, provider, useDiarization, client, openAiKey);
+
+        // Return immediately — frontend tracks progress via realtime events
+        return new Response(
+          JSON.stringify({ status: 'started', audioFileId }),
+          { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      } catch (error) {
+        console.error('Request handling error:', error);
+        return new Response(
+          JSON.stringify({ error: 'Failed to start transcription', details: String(error) }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  },
+};
 

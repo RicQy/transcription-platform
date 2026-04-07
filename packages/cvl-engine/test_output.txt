@@ -1,0 +1,67 @@
+
+[7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mD:/zenflow/legal-transcribe-app/packages/cvl-engine[39m
+
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFiller Removal[2m > [22mremoves basic fillers
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFiller Removal[2m > [22mpreserves crutch phrases
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFiller Removal[2m > [22mreturns violations for each filler removed
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFiller Removal[2m > [22mdoes nothing when disabled
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSlang Normalization[2m > [22mnormalizes common contractions
+ [31m├ù[39m src/__tests__/engine.test.ts[2m > [22mSlang Normalization[2m > [22mpreserves capitalization
+[31m   ΓåÆ Invalid Chai property: toStartWith[39m
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSlang Normalization[2m > [22mnormalizes informal affirmatives
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSlang Normalization[2m > [22mrecords violations with originals
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFalse Start Handling[2m > [22mmarks repeated words with double-dash
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFalse Start Handling[2m > [22mmarks partial words as false starts
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mFalse Start Handling[2m > [22mdoes not double-mark already marked text
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mPunctuation Enforcement[2m > [22mcollapses multiple spaces
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mPunctuation Enforcement[2m > [22mremoves space before punctuation
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mPunctuation Enforcement[2m > [22madds space after punctuation
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mPunctuation Enforcement[2m > [22mpreserves decimal numbers
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mTag Handling[2m > [22mnormalizes non-standard tags
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mTag Handling[2m > [22mconverts parenthetical tags to brackets
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mTag Handling[2m > [22mnormalizes laughter tags
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mTag Handling[2m > [22mpreserves already-correct tags
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSpeaker Label Formatting[2m > [22mnormalizes speaker label format
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSpeaker Label Formatting[2m > [22madds space in "SpeakerN:" format
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSpeaker Label Formatting[2m > [22mexpands shorthand Q: and A:
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mSpeaker Label Formatting[2m > [22mexpands S1: shorthand
+ [31m├ù[39m src/__tests__/engine.test.ts[2m > [22mCapitalization[2m > [22mcapitalizes sentence starts
+[31m   ΓåÆ Invalid Chai property: toStartWith[39m
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mCapitalization[2m > [22mde-shouts non-acronym caps
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mCapitalization[2m > [22mpreserves acronyms
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mCapitalization[2m > [22mcapitalizes standalone i
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mCVL Engine (full pipeline)[2m > [22mprocesses a complete transcript through all rules
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mCVL Engine (full pipeline)[2m > [22mreturns score of 100 for already-compliant text
+ [32mΓ£ô[39m src/__tests__/engine.test.ts[2m > [22mCVL Engine (full pipeline)[2m > [22mrespects disabled rules
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 2 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  src/__tests__/engine.test.ts > Slang Normalization > preserves capitalization
+Error: Invalid Chai property: toStartWith
+ Γ¥» src/__tests__/engine.test.ts:51:16
+     49|   it('preserves capitalization', () => {
+     50|     const { text } = normalizeSlang('Gonna do it');
+     51|     expect(text).toStartWith('Going to');
+       |                ^
+     52|   });
+     53| 
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/2]ΓÄ»
+
+ FAIL  src/__tests__/engine.test.ts > Capitalization > capitalizes sentence starts
+Error: Invalid Chai property: toStartWith
+ Γ¥» src/__tests__/engine.test.ts:165:16
+    163|   it('capitalizes sentence starts', () => {
+    164|     const { text } = enforceCapitalization('hello. world. how are you?ΓÇª
+    165|     expect(text).toStartWith('Hello.');
+       |                ^
+    166|     expect(text).toContain('. World.');
+    167|     expect(text).toContain('. How are you?');
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/2]ΓÄ»
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m28 passed[39m[22m[90m (30)[39m
+[2m   Start at [22m 03:38:37
+[2m   Duration [22m 711ms[2m (transform 147ms, setup 0ms, collect 182ms, tests 25ms, environment 0ms, prepare 189ms)[22m
+
