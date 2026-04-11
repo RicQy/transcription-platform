@@ -47,6 +47,25 @@ CREATE TABLE IF NOT EXISTS style_guide_rules (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS speakers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  name TEXT NOT NULL,
+  default_label TEXT, -- e.g. "Attorney", "Judge", "Witness"
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audio_file_speakers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audio_file_id UUID REFERENCES audio_files(id),
+  speaker_id UUID REFERENCES speakers(id),
+  diarization_label TEXT NOT NULL, -- e.g. "Speaker 0" from WhisperX
+  verified_name TEXT, 
+  role TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(audio_file_id, diarization_label)
+);
+
 -- Seed an admin user (Password: MyPassword123, pre-hashed using something simple or just a placeholder)
 -- In production, please use bcrypt/argon2 hashing.
 INSERT INTO users (email, password_hash, role) 

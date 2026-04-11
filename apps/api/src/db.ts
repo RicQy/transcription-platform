@@ -15,23 +15,31 @@ export const db = {
   // Helper for Supabase-like syntax replacement
   from: (table: string) => ({
     select: (columns = '*') => {
+      const filters: { col: string, val: any }[] = [];
       const builder = {
-        eq: (column: string, value: any) => ({
-          single: async () => {
-            const res = await pool.query(`SELECT ${columns} FROM ${table} WHERE ${column} = $1 LIMIT 1`, [value]);
-            return { data: res.rows[0], error: res.rows[0] ? null : { message: 'Not found' } };
-          },
-          execute: async () => {
-            const res = await pool.query(`SELECT ${columns} FROM ${table} WHERE ${column} = $1`, [value]);
-            return { data: res.rows, error: null };
-          }
-        }),
+        eq: (column: string, value: any) => {
+          filters.push({ col: column, val: value });
+          return builder;
+        },
         single: async () => {
-          const res = await pool.query(`SELECT ${columns} FROM ${table} LIMIT 1`);
+          let query = `SELECT ${columns} FROM ${table}`;
+          const params: any[] = [];
+          if (filters.length > 0) {
+            query += ' WHERE ' + filters.map((f, i) => `${f.col} = $${i + 1}`).join(' AND ');
+            params.push(...filters.map(f => f.val));
+          }
+          query += ' LIMIT 1';
+          const res = await pool.query(query, params);
           return { data: res.rows[0], error: res.rows[0] ? null : { message: 'Not found' } };
         },
         execute: async () => {
-          const res = await pool.query(`SELECT ${columns} FROM ${table}`);
+          let query = `SELECT ${columns} FROM ${table}`;
+          const params: any[] = [];
+          if (filters.length > 0) {
+            query += ' WHERE ' + filters.map((f, i) => `${f.col} = $${i + 1}`).join(' AND ');
+            params.push(...filters.map(f => f.val));
+          }
+          const res = await pool.query(query, params);
           return { data: res.rows, error: null };
         }
       };
