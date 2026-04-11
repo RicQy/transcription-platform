@@ -1,11 +1,30 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build',
-      '-t',
-      'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app',
-      '.'
-    ]
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app:$COMMIT_SHA'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app:latest'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'transcription-platform'
+      - '--image=europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app:$COMMIT_SHA'
+      - '--region=europe-west1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
 
 images:
-  - 'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app'
+  - 'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/legal-transcription-app/transcription-platform/app:latest'
