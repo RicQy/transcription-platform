@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS audio_files (
   user_id UUID REFERENCES users(id),
   filename TEXT NOT NULL,
   storage_url TEXT NOT NULL,
+  storage_key TEXT,
   transcription_status TEXT DEFAULT 'pending',
   transcript_id UUID,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

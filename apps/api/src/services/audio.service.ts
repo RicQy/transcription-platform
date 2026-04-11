@@ -6,10 +6,11 @@ class AudioService {
     return data;
   }
 
-  async saveFile(fileName: string, storageUrl: string, userId: string) {
+  async saveFile(fileName: string, storageUrl: string, userId: string, storageKey?: string) {
     const { data: audioFile } = await db.from('audio_files').insert([{
       filename: fileName,
       storage_url: storageUrl,
+      storage_key: storageKey,
       transcription_status: 'pending',
       user_id: userId
     }]).select().single() as any;
