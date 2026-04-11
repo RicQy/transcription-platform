@@ -16,9 +16,14 @@ export const db = {
   from: (table: string) => ({
     select: (columns = '*') => {
       const filters: { col: string, val: any }[] = [];
+      const orders: { col: string, dir: 'ASC' | 'DESC' }[] = [];
       const builder = {
         eq: (column: string, value: any) => {
           filters.push({ col: column, val: value });
+          return builder;
+        },
+        order: (column: string, { ascending = true } = {}) => {
+          orders.push({ col: column, dir: ascending ? 'ASC' : 'DESC' });
           return builder;
         },
         single: async () => {
@@ -27,6 +32,9 @@ export const db = {
           if (filters.length > 0) {
             query += ' WHERE ' + filters.map((f, i) => `${f.col} = $${i + 1}`).join(' AND ');
             params.push(...filters.map(f => f.val));
+          }
+          if (orders.length > 0) {
+            query += ' ORDER BY ' + orders.map(o => `${o.col} ${o.dir}`).join(', ');
           }
           query += ' LIMIT 1';
           const res = await pool.query(query, params);
@@ -38,6 +46,9 @@ export const db = {
           if (filters.length > 0) {
             query += ' WHERE ' + filters.map((f, i) => `${f.col} = $${i + 1}`).join(' AND ');
             params.push(...filters.map(f => f.val));
+          }
+          if (orders.length > 0) {
+            query += ' ORDER BY ' + orders.map(o => `${o.col} ${o.dir}`).join(', ');
           }
           const res = await pool.query(query, params);
           return { data: res.rows, error: null };

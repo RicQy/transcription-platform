@@ -66,6 +66,16 @@ CREATE TABLE IF NOT EXISTS audio_file_speakers (
   UNIQUE(audio_file_id, diarization_label)
 );
 
+CREATE TABLE IF NOT EXISTS evaluations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transcript_id UUID REFERENCES transcripts(id),
+  gold_standard_text TEXT NOT NULL,
+  wer DECIMAL(5,2), -- Word Error Rate
+  cer DECIMAL(5,2), -- Character Error Rate
+  alignment_data JSONB, -- Diff data for highlighting
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Seed an admin user (Password: MyPassword123, pre-hashed using something simple or just a placeholder)
 -- In production, please use bcrypt/argon2 hashing.
 INSERT INTO users (email, password_hash, role) 

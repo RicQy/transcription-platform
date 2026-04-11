@@ -13,6 +13,7 @@ import audioRoutes from './routes/audio.routes.js';
 import transcriptionRoutes from './routes/transcription.routes.js';
 import styleGuideRoutes from './routes/style-guide.routes.js';
 import speakerRoutes from './routes/speaker.routes.js';
+import evaluationRoutes from './routes/evaluation.routes.js';
 import './workers/transcription.worker.js';
 
 dotenv.config();
@@ -42,6 +43,7 @@ app.use('/', audioRoutes);
 app.use('/', transcriptionRoutes);
 app.use('/', styleGuideRoutes);
 app.use('/', speakerRoutes);
+app.use('/', evaluationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

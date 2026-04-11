@@ -19,11 +19,20 @@ export const transcriptionWorker = new Worker('transcription', async (job: Job) 
     if (provider === 'whisperx') {
       const output = await replicate.run(
         "victor-upmeet/whisperx:84d2627e7d68a98f1f5035fcd7a31b67f1b74d47cbaf0effda9930fca56ec483",
-        { input: { audio: storageUrl, batch_size: 64, align_output: true } }
-      );
+        { input: { 
+          audio: storageUrl, 
+          batch_size: 64, 
+          align_output: true,
+          diarize: true, // Enable speaker identification
+          min_speakers: 1,
+          max_speakers: 10
+        } }
+      ) as any;
       transcriptionData = output;
-      const segments = Array.isArray(output) ? output : (output as any).segments;
-      rawText = segments ? segments.map((s: any) => s.text).join(' ') : (String((output as any).text) || '');
+      const segments = Array.isArray(output) ? output : output.segments;
+      rawText = segments 
+        ? segments.map((s: any) => `[${s.speaker || 'SPEAKER_0'}]: ${s.text}`).join('\n') 
+        : (String(output.text) || '');
     } else {
       rawText = "Alternative provider transcription results.";
     }
@@ -39,6 +48,21 @@ export const transcriptionWorker = new Worker('transcription', async (job: Job) 
         io.emit(`audio:${audioFileId}:styling`, { status: 'applying_rules' });
         finalOutput = await applyStyleGuideDirect(rawText, rules);
       }
+    }
+
+    // Get verified speaker names
+    const { data: mappings } = await db.from('audio_file_speakers')
+      .select('*')
+      .eq('audio_file_id', audioFileId)
+      .execute() as any;
+
+    if (mappings?.length > 0) {
+      mappings.forEach((m: any) => {
+        if (m.verified_name) {
+          const regex = new RegExp(`\\[${m.diarization_label}\\]`, 'g');
+          finalOutput = finalOutput.replace(regex, `${m.verified_name}`);
+        }
+      });
     }
 
     // CVL Enforcement
