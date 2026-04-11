@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getApiUrl } from '../api/config';
 import { useAudio } from '../api/audio';
+import { SpeakerLabeler } from '../components/SpeakerLabeler';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -306,12 +307,13 @@ export default function TranscriptEditorPage() {
           )}
         </div>
 
-        {/* CVL QA Sidebar */}
-        {hasCVLData && showCVLPanel && (
-          <div className="w-72 flex-shrink-0 space-y-4">
+        {/* Sidebars */}
+        <div className="w-72 flex-shrink-0 space-y-4">
+          <SpeakerLabeler audioFileId={id || ''} />
+          {hasCVLData && showCVLPanel && (
             <CVLStatsPanel stats={cvlStats} totalViolations={cvlViolations} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
