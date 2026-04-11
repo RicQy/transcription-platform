@@ -4,7 +4,16 @@ import { getApiBaseUrl } from '../api/config';
 
 let socketInstance: Socket | null = null;
 
-export function useSocket() {
+interface SocketHook {
+  socket: Socket;
+  isConnected: boolean;
+  on: (event: string, cb: Function) => void;
+  off: (event: string, cb: Function) => void;
+  emit: (event: string, ...args: any[]) => void;
+  subscribe: (channel: string, event: string, cb: Function) => void;
+}
+
+export function useSocket(): SocketHook {
   const [isConnected, setIsConnected] = useState(false);
   
   const socket = useMemo(() => {

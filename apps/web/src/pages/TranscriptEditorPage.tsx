@@ -4,6 +4,8 @@ import { useParams, Link } from 'react-router-dom';
 import { getApiUrl } from '../api/config';
 import { useAudio } from '../api/audio';
 import { SpeakerLabeler } from '../components/SpeakerLabeler';
+import EvaluationViewer from '../components/EvaluationViewer';
+import { evaluationApi, EvaluationData } from '../api/evaluations';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -157,6 +159,10 @@ export default function TranscriptEditorPage() {
   const [viewMode, setViewMode] = useState<'editor' | 'compare'>('editor');
   const [isSaving, setIsSaving] = useState(false);
   const [showCVLPanel, setShowCVLPanel] = useState(true);
+  const [goldText, setGoldText] = useState('');
+  const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [showEvalPanel, setShowEvalPanel] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -312,6 +318,100 @@ export default function TranscriptEditorPage() {
           <SpeakerLabeler audioFileId={id || ''} />
           {hasCVLData && showCVLPanel && (
             <CVLStatsPanel stats={cvlStats} totalViolations={cvlViolations} />
+          )}
+
+          {/* Quality Audit Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Quality Audit</h3>
+              <button 
+                onClick={() => setShowEvalPanel(!showEvalPanel)}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {evaluation ? 'View Stats' : 'Run Evaluation'}
+              </button>
+            </div>
+
+            {!evaluation && (
+              <div className="space-y-3 font-humanist">
+                <p className="text-xs text-gray-500">
+                  Compare against an official Gold Standard transcript to measure accuracy.
+                </p>
+                <textarea
+                  placeholder="Paste official transcript here..."
+                  value={goldText}
+                  onChange={(e) => setGoldText(e.target.value)}
+                  className="w-full h-32 text-xs border-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all p-2"
+                />
+                <button
+                  disabled={!goldText || isEvaluating}
+                  onClick={async () => {
+                    if (!transcript) return;
+                    setIsEvaluating(true);
+                    try {
+                      const data = await evaluationApi.runEvaluation(transcript.id, goldText);
+                      setEvaluation(data);
+                    } catch (e) {
+                      console.error('Evaluation failed:', e);
+                      alert('Failed to run evaluation');
+                    } finally {
+                      setIsEvaluating(false);
+                    }
+                  }}
+                  className={`w-full py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${
+                    !goldText || isEvaluating 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 hover:shadow-indigo-200'
+                  }`}
+                >
+                  {isEvaluating ? 'Calculating Metrics...' : 'Calculate Accuracy'}
+                </button>
+              </div>
+            )}
+
+            {evaluation && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs mb-1">
+                   <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-gray-600 font-medium">Audit Complete</span>
+                   </div>
+                   <button 
+                    onClick={() => setEvaluation(null)}
+                    className="text-gray-400 hover:text-red-500"
+                   >
+                     Reset
+                   </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="bg-indigo-50 rounded-lg py-2">
+                    <div className="text-sm font-bold text-indigo-700">{evaluation.wer}%</div>
+                    <div className="text-[10px] text-indigo-500 uppercase font-medium">WER</div>
+                  </div>
+                   <div className="bg-emerald-50 rounded-lg py-2">
+                    <div className="text-sm font-bold text-emerald-700">{evaluation.cer}%</div>
+                    <div className="text-[10px] text-emerald-500 uppercase font-medium">CER</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {evaluation && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
+              <div className="max-w-4xl w-full">
+                <div className="mb-4 flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-white font-humanist">Deep Quality Audit Analysis</h2>
+                  <button 
+                    onClick={() => setEvaluation(null)}
+                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-all"
+                  >
+                    Close Analysis
+                  </button>
+                </div>
+                <EvaluationViewer data={evaluation} />
+              </div>
+            </div>
           )}
         </div>
       </div>

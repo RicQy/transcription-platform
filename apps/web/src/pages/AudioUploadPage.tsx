@@ -141,7 +141,6 @@ export default function AudioUploadPage() {
 
       await uploadAudio({
         file: fileToUpload,
-        onProgress: setUploadProgress,
       });
       navigate('/dashboard');
     } catch {

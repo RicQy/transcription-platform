@@ -138,7 +138,7 @@ export default function DashboardPage() {
 
     // Subscribe to each file channel
     audioFiles.forEach(file => {
-      socket.subscribe(`audio:${file.id}`);
+      socket.on(`audio:${file.id}:progress`, handleProgress);
     });
 
     return () => {
@@ -148,7 +148,7 @@ export default function DashboardPage() {
       socket.off('TRANSCRIPTION_FAILED', handleFailed);
       
       audioFiles.forEach(file => {
-        socket.unsubscribe(`audio:${file.id}`);
+        socket.off(`audio:${file.id}:progress`, handleProgress);
       });
     };
   }, [socket, audioFiles, queryClient]);
@@ -248,17 +248,16 @@ export default function DashboardPage() {
                     {file.filename}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDuration(file.duration)}
+                    —
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(file.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <StatusBadge status={file.status} />
+                    <StatusBadge status={(file.transcription_status || 'pending').toUpperCase()} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap flex items-center gap-4 text-sm">
-                    {file.status === 'COMPLETE' ||
-                    file.transcription_status === 'completed' ||
+                    {file.transcription_status === 'completed' ||
                     file.transcript_id ? (
                       <Link to={`/editor/${file.id}`} className="text-blue-600 hover:underline">
                         Open Editor
