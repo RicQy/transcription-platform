@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.routes.js';
 import audioRoutes from './routes/audio.routes.js';
 import transcriptionRoutes from './routes/transcription.routes.js';
 import styleGuideRoutes from './routes/style-guide.routes.js';
+import './workers/transcription.worker.js';
 
 dotenv.config();
 
