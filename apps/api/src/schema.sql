@@ -33,7 +33,10 @@ CREATE TABLE IF NOT EXISTS transcripts (
 
 CREATE TABLE IF NOT EXISTS style_guides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
   name TEXT NOT NULL,
+  version INT DEFAULT 1,
+  is_published BOOLEAN DEFAULT true,
   is_active BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
