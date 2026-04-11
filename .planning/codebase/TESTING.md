@@ -1,43 +1,41 @@
-# Testing Practices
+# Testing & Quality Assurance
 
 **Analysis Date:** 2026-04-11
 
-## Test Environment
+## Test Strategy
 
-- **Framework:** Vitest 1.6.0.
-- **Environment:**
-  - JSDOM for frontend testing.
-  - Node.js for API/package testing.
-- **Runner:** `npm run test` or `pnpm -r test` from the root.
+The project employs a **Unified Testing Stack** using `Vitest`, providing high-speed unit and integration tests across the monorepo.
 
-## Frontend Testing (apps/web)
+## Component Testing
 
-- **UI Components:** React Testing Library used for component integration tests.
-- **Tools:**
-  - `@testing-library/react`
-  - `@testing-library/user-event`
-  - `jest-dom` for custom matchers.
-- **Key Coverage Areas:**
-  - `LoginPage.test.tsx` - Login flow and validation.
-  - `DashboardPage.test.tsx` - Data display and loading states.
-  - `AudioUploadPage.test.tsx` - File selection and upload trigger.
-- **Store Testing:** `authStore.test.ts` for Zustand store logic.
+### 1. Correct Verbatim Legal (CVL) Engine
+- **Target:** `packages/cvl-engine`
+- **Focus:** 100% deterministic test coverage for all transcription rules (stutter removal, slang normalization, etc.).
+- **Tests:** `engine.test.ts` uses extensive datasets of "Raw" vs "Gold Standard" strings to verify compliance.
 
-## Backend Testing (apps/api)
+### 2. Frontend (React/Vite)
+- **Target:** `apps/web`
+- **Framework:** Vitest + React Testing Library (JSDOM).
+- **Tests:**
+  - `TranscriptEditor.test.tsx` - Syncing between audio and text highlighting.
+  - `AuthFlow.test.tsx` - Login/Logout/Signup logic.
 
-- **Status:** Currently minimal test coverage in API.
-- **Framework:** Vitest ready for use (`pnpm test` in api directory).
-- **Strategy:** Mocking external AI services (OpenAI, Anthropic) and DB calls is recommended for future API tests.
+### 3. Backend (API)
+- **Target:** `apps/api`
+- **Strategy:** Feature-based integration testing for core endpoints using Vitest.
+- **Status:** Basic coverage for authentication; priority for worker queue testing.
 
-## Package Testing
+## Quality Standards
 
-- **Status:** CVL Engine and Shared Types are structured for independent testing.
+- **Gold Standard (GS) Benchmark:** A collection of 10 official courtroom transcripts used to evaluate the 3-layer pipeline accuracy.
+- **WER/CER Monitoring:** The dashboard includes an "Eval" mode that calculates Word Error Rate (WER) against manual corrections.
 
-## Patterns
+## Execution
 
-- **AAA Pattern:** Arrange-Act-Assert followed in most existing tests.
-- **Mocking:** `vi.mock` used for external modules and store overrides in frontend tests.
+- **All Tests:** `pnpm test` (root)
+- **Engine Tests:** `pnpm --filter @transcribe/cvl-engine test`
+- **Web Tests:** `pnpm --filter @transcribe/web test`
 
 ---
 
-*Testing map: 2026-04-11*
+*Testing Map: 2026-04-11*

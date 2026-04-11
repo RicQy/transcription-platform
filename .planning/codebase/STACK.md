@@ -8,71 +8,62 @@
 - TypeScript 5.4 - All application code (API, Web, Shared Types, CVL Engine)
 
 **Secondary:**
-- SQL - Database schema and queries
-- Shell - Build and deployment scripts
+- SQL - Database schema (PostgreSQL)
+- Shell - Build and deployment automation
 
 ## Runtime
 
 **Environment:**
 - Node.js >=20
-- Browser (Evergreen browsers supported by Vite)
+- Browser (Modern evergreen browsers via Vite)
 
 **Package Manager:**
-- pnpm 10.28.0 (Monorepo with pnpm-workspace.yaml)
-- Lockfile: `pnpm-lock.yaml` present
+- pnpm 10.x (Monorepo setup with `pnpm-workspace.yaml`)
+- Lockfile: `pnpm-lock.yaml`
 
-## Frameworks
+## Frameworks & Build Tools
 
 **Core:**
-- Express 4.19 (API) - Web server
+- Express 4.19 (API) - Node.js web server
 - React 18.3 (Web) - UI framework
-- Vite 5.2 (Web) - Build tool and dev server
+- Vite 5.2 (Web) - Build tool and development server
+
+**Styling:**
+- Tailwind CSS 3.4 (Web) - Utility-first styling
+- PostCSS / Autoprefixer
 
 **Testing:**
-- Vitest 1.6 (Web) - Unit testing
-- Testing Library (React) - UI component testing
-
-**Build/Dev:**
-- tsx (API) - TypeScript execution for dev
-- Tailwind CSS 3.4 (Web) - Styling foundation
-- PostCSS / Autoprefixer
+- Vitest 1.6 (Web/API/Packages) - Unified testing framework
+- React Testing Library - Frontend component testing
 
 ## Key Dependencies
 
-**Critical:**
-- @anthropic-ai/sdk 0.82 - LLM-based formatting and cleanup
-- replicate 1.4 - AI inference for WhisperX transcription
-- @transcribe/cvl-engine (internal) - Deterministic legal compliance enforcement
-- socket.io 4.8 - Real-time transcription progress updates
+**AI & Transcription:**
+- `replicate` 1.4+ - WhisperX inference for word-level alignment & diarization
+- `@anthropic-ai/sdk` 0.8+ - Claude 3.5 Sonnet for jurisdictional styling
+- `@transcribe/cvl-engine` (Internal) - Deterministic legal compliance processor
 
-**Infrastructure:**
-- pg 8.20 - PostgreSQL client with pool management
-- jsonwebtoken / bcrypt - Authentication and security
-- multer - Audio file upload handling
-- zustand / @tanstack/react-query - Web state management
+**Infrastructure & Comms:**
+- `pg` 8.2+ - PostgreSQL driver with connection pooling
+- `bullmq` - Background worker queue (Redis-backed)
+- `socket.io` 4.8 - Real-time pipeline status streaming
+- `multer` - Audio file upload handling
+- `jsonwebtoken` / `bcrypt` - Authentication and security
 
-## Configuration
+**Frontend State:**
+- `zustand` - Global client-side state
+- `@tanstack/react-query` - Server state and data fetching
+- `wavesurfer.js` - Audio visualization
+- `tiptap` - Headless rich-text editor for transcripts
 
-**Environment:**
-- `.env` files - Local environment configuration
-- JWT_SECRET, DATABASE_URL, OPENAI_API_KEY, ANTHROPIC_API_KEY required
+## Configuration & Standards
 
-**Build:**
-- `tsconfig.base.json` - Base TypeScript options
-- `pnpm-workspace.yaml` - Monorepo workspace definitions
-- `vite.config.ts` (apps/web) - Frontend build configuration
-
-## Platform Requirements
-
-**Development:**
-- Windows/Linux/macOS with Node.js 20+
-- Local PostgreSQL and Redis recommended (referenced in .env)
-
-**Production:**
-- Deployment Target: Support for Docker, Railway, or similar Node.js hosting.
-- PostgreSQL Database required.
+- **Linting:** ESLint 8.5+ with TypeScript focus
+- **Formatting:** Prettier 3.2+
+- **Version Control:** Git
+- **CI/CD Readiness:** Docker-ready (root Dockerfile), Vercel/Railway compatible
 
 ---
 
-*Stack analysis: 2026-04-11*
-*Update after major dependency changes*
+*Stack Analysis: 2026-04-11*
+

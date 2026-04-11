@@ -1,51 +1,52 @@
-# Architecture
+# System Architecture
 
 **Analysis Date:** 2026-04-11
 
+## Overview
+
+The platform uses a **Modern Monorepo Architecture** (pnpm workspaces) with a **3-Layer Precision Transcription Pipeline**. It decouples concern between data ingestion, intensive AI processing, and deterministic legal rule enforcement.
+
 ## System Pattern
 
-The application follows a **Monorepo Architecture** using `pnpm` workspaces, separating the frontend, backend, and shared logic.
+### 1. Separation of Concerns (Monorepo)
+- **apps/web:** React/Vite SPA for editor and dashboard.
+- **apps/api:** Express Node.js server for orchestration and API.
+- **packages/cvl-engine:** Shared, deterministic logic package for CVL enforcement.
+- **packages/shared-types:** Centralized TypeScript definitions for end-to-end type safety.
 
-- **Frontend (apps/web):** Single Page Application (SPA) built with React and Vite.
-- **Backend (apps/api):** Node.js Express server providing REST endpoints and WebSocket communication.
-- **Shared Logic (packages/cvl-engine, packages/shared-types):** Internal packages for business logic and type definitions.
+### 2. The 3rd Layer Precision Pipeline (The Core)
+1. **Layer 1: ASR (Automated Speech Recognition)**
+   - External: WhisperX (Word-alignment, Diarization).
+2. **Layer 2: LLM (Jurisdictional Styling)**
+   - External: Claude 3.5 Sonnet applied via Jurisdictional Rule Extracts.
+3. **Layer 3: Deterministic (CVLEngine)**
+   - Internal Code: Enforces Clean Verbatim Legal (CVL) rules (stutter removal, slang normalization, False Starts) with 100% predictability.
 
 ## Key Layers
 
-### 1. Presentation Layer (apps/web)
-- **Pages:** Modular screens like Dashboard, Login, and Audio Upload.
-- **Components:** Reusable UI elements built with Tailwind CSS.
-- **State Management:** Zustand for global state (auth, ui) and React Query for server state.
-- **Multimedia:** Wavesurfer.js for audio visualization and Tiptap for transcript editing.
+### Presentation Layer (apps/web)
+- **Editor:** Custom TipTap/React editor providing side-by-side QA comparison between raw ASR and corrected CVL output.
+- **State:** Zustand handles authentication and UI state; React Query handles server data synchronization.
 
-### 2. Service Layer (apps/api)
-- **REST Endpoints:** Authentication, file uploads, and transcription management.
-- **Real-time Gateway:** Socket.io for streaming pipeline status.
-- **Business Logic:** Orchestrates communication between external AI services (Replicate, Anthropic) and the CVL engine.
+### Services Layer (apps/api)
+- **Queueing:** BullMQ + Redis for processing long-running transcription tasks.
+- **Gateway:** Socket.io provides push-based status updates to the client.
+- **Database:** PostgreSQL stores user data, transcript metadata, and jurisdictional rules.
 
-### 3. Business Logic (packages/cvl-engine)
-- **Deterministic Processing:** A dedicated engine that applies strict legal transcription rules (filler removal, slang normalization, etc.) to transcript text.
-
-### 4. Data Access (apps/api/src/db.ts)
-- **Custom Shim:** A lightweight database wrapper that mimics the Supabase `from().select().eq()` API on top of raw PostgreSQL using the `pg` driver.
+### Business Logic (packages/cvl-engine)
+- **Rule Parser:** Interprets jurisdictional manuals for rule execution.
+- **Processor:** Deterministic text transformer that requires no AI inference for final formatting pass.
 
 ## Data Flow
 
-1. **Upload:** User uploads audio file via Web UI -> API `multer` storage -> DB `audio_files` record.
-2. **Transcription Trigger:** Frontend calls `/transcribe` -> API starts `transcribeAsync` worker.
-3. **Pipeline:**
-   - **ASR:** WhisperX (via Replicate) generates raw text with timestamps.
-   - **Styling:** LLM (via Anthropic) applies user-specific style guide rules.
-   - **Compliance:** CVL Engine enforces deterministic legal formatting.
-4. **Completion:** Results saved to DB `transcripts` -> Socket.io emits `finished` event to Frontend.
-
-## Design Patterns
-
-- **Monorepo Workspaces:** Ensures type safety across the stack via `@transcribe/shared-types`.
-- **Observer Pattern:** Real-time updates via WebSockets for long-running transcription tasks.
-- **Strategy Pattern (Implicit):** Support for multiple transcription providers (WhisperX, alternative stubs).
-- **Rule-Based Engine:** Decoupled CVL enforcement for consistent formatting.
+1. **User Action:** Uploads file to R2 via Pre-signed URL.
+2. **API Trigger:** `/transcribe` endpoint starts a background job.
+3. **Worker Processing:**
+   - Raw transcription using WhisperX.
+   - Styling using LLM + Jurisdictional Rules.
+   - Final pass using CVLEngine.
+4. **Completion:** Result stored in DB; Socket.io emits completion notification.
 
 ---
 
-*Architecture map: 2026-04-11*
+*Architecture Map: 2026-04-11*

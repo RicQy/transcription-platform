@@ -1,29 +1,41 @@
-# Technical Concerns
+# Technical Concerns & Risk Log
 
 **Analysis Date:** 2026-04-11
 
-## Technical Debt
-
-- **Monolithic API Handler:** `apps/api/src/index.ts` is growing large and contains all routes, logic, and external service orchestration. It needs refactoring into separate routes/controllers.
-- **Supabase Shim:** The `db.ts` shim is functional but basic. It lacks robust error handling, transactions, and full query capability compared to a real ORM (like Prisma or Drizzle).
-- **Hard-coded Models:** AI model versions are hard-coded in transcription logic (e.g., `claude-3-5-sonnet-20240620`).
-
 ## Risks & Fragility
 
-- **Transcription Pipeline Complexity:** The three-step process (WhisperX -> Anthropic -> CVL Engine) has multiple points of potential failure. Error handling at each step is present but may not be robust enough for long audio files.
-- **Local Storage Reliance:** Audio files are stored on the local disk (`uploads/` folder). This will not scale to multi-instance/serverless deployments without moving to S3 or similar.
-- **Large Audio Handling:** Multer and the in-memory processing pattern in `transcribeAsync` might struggle with very large files without streaming or worker queues (e.g., BullMQ).
+### 1. Large Audio Processing (Memory Limits)
+- **Description:** Processing 2-hour+ audio files using Multer and in-memory LLM correction can hit container memory limits (GCP Cloud Run standard is 512MB-1GB).
+- **Mitigation:** Implemented Cloudflare R2 direct-to-storage and BullMQ background workers to decouple ingestion from processing.
 
-## Security Concerns
+### 2. Multi-Step Pipeline Reliability
+- **Description:** A failure in WhisperX (ASR) or Claude (Styling) stops the entire pipeline.
+- **Mitigation:** Implemented robust retry logic in BullMQ workers and granular Socket.io status reporting for debugging.
 
-- **JWT Secret:** Default secrets in `index.ts` and `.env` template (`change_me...`) could be leaked if not properly managed during deployment.
-- **CORS Configuration:** Currently set to `*`. Should be restricted to specific domains in production.
+### 3. Jurisdictional Extraction Accuracy
+- **Description:** LLM may hallucinate transcription rules from dense legal manuals (PDFs).
+- **Mitigation:** Use Claude 3.5 Sonnet with a strict "Rule Schema" prompt; allow Admin review of extracted rules before activation.
 
-## Known Bugs & Issues
+## Technical Debt
 
-- **ASR Worker URL:** The `.env` references `http://asr-worker:8000`, which implies a Docker environment that might not be running in all local dev setups.
-- **Database Connection Error Handling:** Application crashes if DB is not available on startup (common in local dev if docker is not up).
+### 1. Supabase Query Shim
+- **Description:** `apps/api/src/db.ts` uses a manual shim to mimic the Supabase JS API on raw SQL. This is functional but lacks full ORM power (migrations, complex joins).
+- **Plan:** Consider migrating to Prisma if database complexity grows significantly.
+
+### 2. hard-coded AI Parameters
+- **Description:** Model versions and temperature settings are currently hard-coded in worker logic.
+- **Plan:** Move to a centralized `config.ts` or DB-driven configuration provider.
+
+## Infrastructure & Security
+
+### 3. Billing & Resource Scaling (GCP)
+- **Description:** Cloud Run deployment requires an active billing account and proper `gserviceaccount` permissions for storage access.
+- **Concern:** If billing is not active, the prod platform remains offline.
+
+### 4. JWT Secret Rotation
+- **Description:** Currently using static strings in `.env`.
+- **Plan:** Migrate to GCP Secret Manager for production environment variables.
 
 ---
 
-*Concerns log: 2026-04-11*
+*Concerns Log: 2026-04-11*

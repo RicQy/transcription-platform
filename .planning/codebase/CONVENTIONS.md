@@ -1,46 +1,49 @@
-# Coding Conventions
+# Development Conventions
 
 **Analysis Date:** 2026-04-11
 
-## Language & Style
+## Code Style
 
-- **Language:** TypeScript 5.4.
-- **Formating:** Prettier is used project-wide with standard settings.
-- **Linting:** ESLint with recommended TypeScript and React rules.
+### 1. Languages & Dialects
+- **TypeScript:** Mandatory for all application logic. 
+- **Strict Mode:** Enabled in `tsconfig.base.json`.
+- **Typing:** Explicit types preferred over `any`. Interface definitions in `packages/shared-types` are the source of truth for cross-package communication.
+
+### 2. Formatting
+- **Prettier:** Standardized via `.prettierrc`.
+- **ESLint:** Enforced for code quality in all packages.
 - **Naming:**
   - Variables/Functions: `camelCase`
-  - Classes/Components: `PascalCase`
-  - Constants: `UPPER_SNAKE_CASE`
-  - Files: `kebab-case.ts` (mostly), but React components often use `PascalCase.tsx`.
+  - Components/Interfaces: `PascalCase`
+  - Constants: `SCREAMING_SNAKE_CASE`
 
-## Patterns & Practices
+## Architecture Patterns
 
-### Backend (apps/api)
-- **Modular Imports:** Uses ES modules (`import/export`).
-- **Async/Await:** Preferred over raw promises or callbacks.
-- **Error Handling:** `try...catch` blocks around database and external API calls.
-- **Controllers:** Currently inlined in `index.ts` due to lean size, but following a route-handler pattern.
-- **Dependency Isolation:** Internal packages like `cvl-engine` used for complex logic.
+### 1. Monorepo Workflow
+- **Dependency Management:** Use `pnpm` exclusively. Never use `npm` or `yarn` inside the workspace.
+- **Cross-package Imports:** Reference internal packages via their `@transcribe/*` namespace.
 
-### Frontend (apps/web)
-- **Functional Components:** React functional components with Hooks.
-- **CSS:** Tailwind CSS for styling with utility-first approach.
-- **Data Fetching:** React Query for caching and sync management.
-- **State Management:** Zustand for lightweight global state (e.g., Auth).
-- **Component Structure:** `Layout` component wraps page content for consistency.
+### 2. Frontend (React)
+- **Hooks:** Use functional components and hooks.
+- **State:** Zustand for persistent/global state; React Query for remote data.
+- **Tailwind:** Utility-first styling. No custom CSS unless absolutely necessary (defined in `index.css`).
 
-## Database & Data
+### 3. Backend (Express)
+- **Error Handling:** Use centralized `errorHandler` middleware.
+- **Async:** Use `async/await` with proper `try/catch` or wrapper utilities.
+- **DB Interface:** Use the `db.ts` shim to maintain consistent query patterns across the API.
 
-- **Supabase Shim:** Code interacts with raw PostgreSQL using a Supabase-like syntax (`db.from('table').select(...)`) implemented in `apps/api/src/db.ts`.
-- **Primary Keys:** UUIDs are used for all tables (generated via `gen_random_uuid()` in SQL).
-- **Snake Case:** Column names in DB use `snake_case`.
+## API Standards
 
-## Security
+### 1. REST Endpoints
+- **Response Format:** Consistent JSON objects.
+- **Versioning:** Implicitly current.
+- **Authentication:** Bearer token (JWT) for protected routes.
 
-- **Authentication:** JWT-based auth with `Bearer` token in `Authorization` header.
-- **Passwords:** Hashed using `bcrypt` (10 rounds).
-- **Environment Variables:** All secrets and service URLs must be in `.env`.
+### 2. WebSocket Patterns
+- **Events:** Namespaced `transcription:*` for pipeline events.
+- **Stability:** Clients must handle disconnection/reconnection logic.
 
 ---
 
-*Convention map: 2026-04-11*
+*Conventions Map: 2026-04-11*
