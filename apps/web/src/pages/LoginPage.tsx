@@ -46,16 +46,14 @@ export default function LoginPage() {
 
   const handleLogin = async (values: LoginFormValues) => {
     try {
-      await login(values.email, values.password);
-      navigate('/dashboard', { replace: true });
+      await login(values);
     } catch {}
   };
 
   const handleSignup = async (values: SignupFormValues) => {
     try {
-      await signup(values.email, values.password);
-      setIsSignUp(false);
-      alert('Account created! Please check your email to verify your account, then sign in.');
+      await signup(values);
+      // store handles the state update and dashboard redirection via useEffect
     } catch {}
   };
 

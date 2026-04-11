@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { login as apiLogin, logout as apiLogout } from '../api/auth';
+import { login as apiLogin, logout as apiLogout, signup as apiSignup } from '../api/auth';
 import type { UserDto } from '@transcribe/shared-types';
 
 interface AuthState {
   user: UserDto | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  error: string | null;
   initialCheck: () => Promise<void>;
   login: (credentials: any) => Promise<void>;
   signup: (credentials: any) => Promise<void>;
@@ -16,52 +17,46 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  error: null,
 
   initialCheck: async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        set({ user: null, isAuthenticated: false, isLoading: false });
+        set({ user: null, isAuthenticated: false, isLoading: false, error: null });
         return;
       }
-      // Simple validation for now, could be a /me endpoint
       set({ 
         user: { id: 'local', email: 'user@legal.app', role: 'user' as any, createdAt: new Date().toISOString() }, 
         isAuthenticated: true, 
-        isLoading: false 
+        isLoading: false,
+        error: null
       });
     } catch {
-      set({ user: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, isAuthenticated: false, isLoading: false, error: null });
     }
   },
 
   login: async (credentials) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
       const { user, accessToken } = await apiLogin(credentials);
       if (accessToken) localStorage.setItem('token', accessToken);
-      set({ user, isAuthenticated: true, isLoading: false });
-    } catch (error) {
-      set({ isLoading: false });
+      set({ user, isAuthenticated: true, isLoading: false, error: null });
+    } catch (error: any) {
+      set({ isLoading: false, error: error.message || 'Login failed' });
       throw error;
     }
   },
 
   signup: async (credentials) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials)
-      });
-      if (!response.ok) throw new Error('Signup failed');
-      
-      const { user, accessToken } = await response.json();
+      const { user, accessToken } = await apiSignup(credentials);
       if (accessToken) localStorage.setItem('token', accessToken);
-      set({ user, isAuthenticated: true, isLoading: false });
-    } catch (error) {
-      set({ isLoading: false });
+      set({ user, isAuthenticated: true, isLoading: false, error: null });
+    } catch (error: any) {
+      set({ isLoading: false, error: error.message || 'Signup failed' });
       throw error;
     }
   },
@@ -69,6 +64,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     await apiLogout();
     localStorage.removeItem('token');
-    set({ user: null, isAuthenticated: false });
+    set({ user: null, isAuthenticated: false, error: null });
   },
 }));

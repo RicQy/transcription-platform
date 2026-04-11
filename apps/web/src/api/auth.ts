@@ -30,6 +30,24 @@ export async function login(credentials: LoginCredentials): Promise<AuthResponse
   return { user, accessToken };
 }
 
+export async function signup(credentials: LoginCredentials): Promise<AuthResponse> {
+  const response = await fetch(getApiUrl('/auth/register'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Registration failed');
+  }
+
+  const { user, accessToken } = await response.json();
+  if (accessToken) localStorage.setItem('token', accessToken);
+
+  return { user, accessToken };
+}
+
 export async function logout(): Promise<void> {
   localStorage.removeItem('token');
 }
@@ -38,8 +56,6 @@ export async function refreshToken(): Promise<AuthResponse> {
   const token = localStorage.getItem('token');
   if (!token) throw new Error('No session');
   
-  // For a simple local backend, we might just return the existing token
-  // Or check if it's still valid by calling a profile endpoint
   const response = await fetch(getApiUrl('/health'), {
     headers: { 'Authorization': `Bearer ${token}` }
   });
@@ -49,7 +65,6 @@ export async function refreshToken(): Promise<AuthResponse> {
     throw new Error('Session expired');
   }
   
-  // Real implement might fetch user profile here
   return { 
     user: { id: 'temp', email: 'user@legal.app', role: Role.USER, createdAt: new Date().toISOString() }, 
     accessToken: token 

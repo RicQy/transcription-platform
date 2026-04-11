@@ -14,18 +14,29 @@ export const db = {
   
   // Helper for Supabase-like syntax replacement
   from: (table: string) => ({
-    select: (columns = '*') => ({
-      eq: (column: string, value: any) => ({
+    select: (columns = '*') => {
+      const builder = {
+        eq: (column: string, value: any) => ({
+          single: async () => {
+            const res = await pool.query(`SELECT ${columns} FROM ${table} WHERE ${column} = $1 LIMIT 1`, [value]);
+            return { data: res.rows[0], error: res.rows[0] ? null : { message: 'Not found' } };
+          },
+          execute: async () => {
+            const res = await pool.query(`SELECT ${columns} FROM ${table} WHERE ${column} = $1`, [value]);
+            return { data: res.rows, error: null };
+          }
+        }),
         single: async () => {
-          const res = await pool.query(`SELECT ${columns} FROM ${table} WHERE ${column} = $1 LIMIT 1`, [value]);
-          return { data: res.rows[0], error: null };
+          const res = await pool.query(`SELECT ${columns} FROM ${table} LIMIT 1`);
+          return { data: res.rows[0], error: res.rows[0] ? null : { message: 'Not found' } };
         },
         execute: async () => {
-          const res = await pool.query(`SELECT ${columns} FROM ${table} WHERE ${column} = $1`, [value]);
+          const res = await pool.query(`SELECT ${columns} FROM ${table}`);
           return { data: res.rows, error: null };
         }
-      })
-    }),
+      };
+      return builder;
+    },
     
     update: (values: Record<string, any>) => ({
       eq: (column: string, value: any) => ({
@@ -50,7 +61,7 @@ export const db = {
           const params = Object.values(row);
           const query = `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`;
           const res = await pool.query(query, params);
-          return { data: res.rows[0], error: null };
+          return { data: res.rows[0], error: res.rows[0] ? null : { message: 'Insert failed' } };
         }
       })
     })
