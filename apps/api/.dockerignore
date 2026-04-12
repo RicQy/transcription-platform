@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+*.md
+.git
+.planning
+.agent
+.agents
+session-notes
+gcloud-cli
+gcloud.zip
+tmp

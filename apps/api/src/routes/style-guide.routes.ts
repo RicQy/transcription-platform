@@ -17,5 +17,6 @@ const upload = multer({ storage });
 
 router.get('/style-guides', authenticate, styleGuideController.getGuides);
 router.post('/style-guides', authenticate, upload.single('file'), styleGuideController.upload);
+router.post('/style-guides/:id/ingest', authenticate, styleGuideController.ingest);
 
 export default router;

@@ -12,6 +12,13 @@ import {
   type AudioFileDto,
 } from '../api/audio';
 import { useSocket } from '../hooks/useSocket';
+import { ExportService } from '../services/export.service';
+import { getApiUrl } from '../api/config';
+
+const getHeaders = () => ({
+  'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  'Content-Type': 'application/json',
+});
 
 const STATUS_LABELS: Record<string, string> = {
   UPLOADED: 'Uploaded',
@@ -93,6 +100,44 @@ export default function DashboardPage() {
     }
   };
 
+  const handleBatchExport = async (format: 'PDF' | 'DOCX') => {
+    if (selectedIds.size === 0) return;
+    
+    // Filter only completed files
+    const completedFiles = audioFiles?.filter(f => selectedIds.has(f.id) && f.transcription_status === 'completed') || [];
+    if (completedFiles.length === 0) {
+      alert('Please select completed transcripts to export.');
+      return;
+    }
+
+    try {
+      const items = await Promise.all(completedFiles.map(async (file) => {
+        const res = await fetch(getApiUrl(`/transcripts/${file.id}`), { headers: getHeaders() });
+        const transcript = await res.json();
+        
+        // Fetch jurisdiction
+        const gRes = await fetch(getApiUrl(`/style-guides`), { headers: getHeaders() });
+        const guides = await gRes.json();
+        const guide = guides.find((g: any) => g.id === transcript.style_guide_id);
+
+        return {
+          text: transcript.content?.formatted || transcript.full_text || '',
+          options: {
+            filename: `Transcript_${file.filename.split('.')[0]}`,
+            jurisdiction: guide?.jurisdiction || 'LEGAL TRANSCRIPT',
+            title: file.filename,
+            transcriptId: transcript.id
+          }
+        };
+      }));
+
+      await ExportService.toZIP(items, format);
+    } catch (e) {
+      console.error('Batch export failed', e);
+      alert('Failed to generate batch export.');
+    }
+  };
+
   useEffect(() => {
     if (!socket || !audioFiles) return;
 
@@ -160,12 +205,26 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <div className="flex gap-4">
           {selectedIds.size > 0 && (
-            <button
-              onClick={handleDeleteSelected}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors"
-            >
-              Delete Selected ({selectedIds.size})
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleBatchExport('PDF')}
+                className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Export as Searchable PDF (Batch)
+              </button>
+              <button
+                onClick={() => handleBatchExport('DOCX')}
+                className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Export as Word (.docx) (Batch)
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors"
+              >
+                Delete Selected ({selectedIds.size})
+              </button>
+            </div>
           )}
           <Link
             to="/audio/upload"

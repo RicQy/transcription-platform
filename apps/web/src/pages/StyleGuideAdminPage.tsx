@@ -20,19 +20,22 @@ interface StyleGuideRule {
 
 interface StyleGuide {
   id: string;
-  version: string;
-  storage_url: string;
+  name: string;
+  jurisdiction: string;
+  version: number;
+  source_url: string;
   is_active: boolean;
-  parsed_at: string | null;
   created_at: string;
   rules?: StyleGuideRule[];
 }
 
 export default function StyleGuideAdminPage() {
   const queryClient = useQueryClient();
-  const [version, setVersion] = useState('');
+  const [name, setName] = useState('');
+  const [jurisdiction, setJurisdiction] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [ingesting, setIngesting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { data: guides, isLoading } = useQuery<StyleGuide[]>({
@@ -47,11 +50,12 @@ export default function StyleGuideAdminPage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async ({ version, file }: { version: string; file: File }) => {
+    mutationFn: async ({ name, jurisdiction, file }: { name: string; jurisdiction: string; file: File }) => {
       setError(null);
       
       const formData = new FormData();
-      formData.append('version', version);
+      formData.append('name', name);
+      formData.append('jurisdiction', jurisdiction);
       formData.append('file', file);
 
       const response = await fetch(getApiUrl('/style-guides'), {
@@ -69,7 +73,8 @@ export default function StyleGuideAdminPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['style-guides'] });
-      setVersion('');
+      setName('');
+      setJurisdiction('');
       setFile(null);
       setUploading(false);
       alert('Style guide uploaded successfully!');
@@ -81,13 +86,34 @@ export default function StyleGuideAdminPage() {
     },
   });
 
+  const ingestMutation = useMutation({
+    mutationFn: async (id: string) => {
+      setIngesting(id);
+      const response = await fetch(getApiUrl(`/style-guides/${id}/ingest`), {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Ingestion failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['style-guides'] });
+      setIngesting(null);
+      alert('Rule extraction complete!');
+    },
+    onError: (err: any) => {
+      alert(err.message);
+      setIngesting(null);
+    }
+  });
+
   const handleUpload = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !version) return;
+    if (!file || !name) return;
 
     setUploading(true);
     setError(null);
-    uploadMutation.mutate({ version, file });
+    uploadMutation.mutate({ name, jurisdiction, file });
   };
 
   return (
@@ -98,14 +124,24 @@ export default function StyleGuideAdminPage() {
         <h3 className="text-lg font-medium mb-4">Upload New Style Guide</h3>
         <form onSubmit={handleUpload} className="space-y-4 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Version Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Guide Name</label>
             <input
               type="text"
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder="e.g. Legal Style Guide v1.0"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Florida Rules of Judicial Admin"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Jurisdiction</label>
+            <input
+              type="text"
+              value={jurisdiction}
+              onChange={(e) => setJurisdiction(e.target.value)}
+              placeholder="e.g. US-FL"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -127,7 +163,7 @@ export default function StyleGuideAdminPage() {
 
           <button
             type="submit"
-            disabled={uploading || !file || !version}
+            disabled={uploading || !file || !name}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             {uploading ? 'Uploading...' : 'Upload Style Guide'}
@@ -145,29 +181,32 @@ export default function StyleGuideAdminPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Version
+                Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Upload Date
+                Jurisdiction
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Version
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Rules Count
+                Action
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                   Loading...
                 </td>
               </tr>
             ) : guides?.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                   No style guides found.
                 </td>
               </tr>
@@ -175,10 +214,13 @@ export default function StyleGuideAdminPage() {
               guides?.map((guide) => (
                 <tr key={guide.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {guide.version}
+                    {guide.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(guide.created_at).toLocaleString()}
+                    {guide.jurisdiction || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    v{guide.version}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {guide.is_active ? (
@@ -191,8 +233,14 @@ export default function StyleGuideAdminPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {guide.rules?.length || 0} rules
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <button
+                      onClick={() => ingestMutation.mutate(guide.id)}
+                      disabled={ingesting === guide.id}
+                      className="text-blue-600 hover:text-blue-900 font-medium disabled:opacity-50"
+                    >
+                      {ingesting === guide.id ? 'Extracting...' : 'Extract Rules'}
+                    </button>
                   </td>
                 </tr>
               ))

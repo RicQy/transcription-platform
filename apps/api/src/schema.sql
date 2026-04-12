@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS style_guides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id),
   name TEXT NOT NULL,
+  jurisdiction TEXT, -- e.g. "US-FL", "CA-ON"
+  source_url TEXT, -- Link to uploaded style guide PDF/DOCX
+  source_key TEXT, -- R2 key
   version INT DEFAULT 1,
   is_published BOOLEAN DEFAULT true,
   is_active BOOLEAN DEFAULT false,

@@ -6,6 +6,7 @@ import { useAudio } from '../api/audio';
 import { SpeakerLabeler } from '../components/SpeakerLabeler';
 import EvaluationViewer from '../components/EvaluationViewer';
 import { evaluationApi, EvaluationData } from '../api/evaluations';
+import { ExportService } from '../services/export.service';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -163,6 +164,20 @@ export default function TranscriptEditorPage() {
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [showEvalPanel, setShowEvalPanel] = useState(false);
+  const [jurisdiction, setJurisdiction] = useState('LEGAL TRANSCRIPT');
+
+  useEffect(() => {
+    if (!transcript?.style_guide_id) return;
+    const fetchGuide = async () => {
+      const response = await fetch(getApiUrl(`/style-guides`), { headers: getHeaders() });
+      if (response.ok) {
+        const guides = await response.json();
+        const guide = guides.find((g: any) => g.id === transcript.style_guide_id);
+        if (guide?.jurisdiction) setJurisdiction(guide.jurisdiction);
+      }
+    };
+    fetchGuide();
+  }, [transcript?.style_guide_id]);
 
   useEffect(() => {
     if (!id) return;
@@ -254,6 +269,39 @@ export default function TranscriptEditorPage() {
           >
             {viewMode === 'editor' ? 'Compare Layers' : 'Editor'}
           </button>
+          
+          <div className="relative inline-block text-left group">
+            <button className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 transition-colors font-medium">
+              Export ▾
+            </button>
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg hidden group-hover:block z-50">
+              <div className="py-1">
+                <button
+                  onClick={() => ExportService.toPDF(editedText, { 
+                    filename: `Transcript_${audioFile.filename.split('.')[0]}`,
+                    jurisdiction: jurisdiction,
+                    title: audioFile.filename,
+                    transcriptId: transcript.id
+                  })}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  Download PDF (Legal)
+                </button>
+                <button
+                  onClick={() => ExportService.toDOCX(editedText, { 
+                    filename: `Transcript_${audioFile.filename.split('.')[0]}`,
+                    jurisdiction: jurisdiction,
+                    title: audioFile.filename,
+                    transcriptId: transcript.id
+                  })}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  Download DOCX (.docx)
+                </button>
+              </div>
+            </div>
+          </div>
+
           <button
             onClick={handleSave}
             disabled={isSaving}
