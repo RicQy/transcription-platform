@@ -2,7 +2,7 @@ import { db } from '../db.js';
 
 class SpeakerService {
   async getSpeakers(userId: string) {
-    const { data } = await db.from('speakers').select('*').eq('user_id', userId).execute() as any;
+    const { data } = await db.from('speakers').select('*').eq('user_id', userId) as any;
     return data;
   }
 
@@ -16,7 +16,7 @@ class SpeakerService {
   }
 
   async getAudioFileSpeakers(audioFileId: string) {
-    const { data } = await db.from('audio_file_speakers').select('*').eq('audio_file_id', audioFileId).execute() as any;
+    const { data } = await db.from('audio_file_speakers').select('*').eq('audio_file_id', audioFileId) as any;
     return data;
   }
 
@@ -35,7 +35,7 @@ class SpeakerService {
         role: role || existing.role
       })
       .eq('id', existing.id)
-      .execute() as any;
+       as any;
       return data;
     } else {
       const { data } = await db.from('audio_file_speakers').insert([{

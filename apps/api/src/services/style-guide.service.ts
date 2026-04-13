@@ -12,7 +12,7 @@ class StyleGuideService {
     return await db.from('style_guides')
       .select('*')
       .order('created_at', { ascending: false })
-      .execute();
+      ;
   }
 
   async createGuide(userId: string, name: string, jurisdiction?: string, source_url?: string, source_key?: string) {
@@ -38,7 +38,7 @@ class StyleGuideService {
     const { data: rules } = await db.from('style_guide_rules')
       .select('*')
       .eq('guide_id', guideId)
-      .execute() as any;
+       as any;
     
     if (rules) appCache.set(cacheKey, rules);
     return { data: rules };
@@ -63,7 +63,7 @@ class StyleGuideService {
     if (!guide) throw new Error('Style guide not found');
 
     // Check if used by any transcript
-    const { data: transcripts } = await db.from('transcripts').select('id').eq('style_guide_id', guideId).execute() as any;
+    const { data: transcripts } = await db.from('transcripts').select('id').eq('style_guide_id', guideId) as any;
     
     if (guide.is_published || transcripts?.length > 0) {
       // Create new version
@@ -76,10 +76,10 @@ class StyleGuideService {
       }]).select().single() as any;
 
       // Deactivate old one
-      await db.from('style_guides').update({ is_active: false }).eq('id', guideId).execute();
+      await db.from('style_guides').update({ is_active: false }).eq('id', guideId);
 
       // Clone rules
-      const { data: rules } = await db.from('style_guide_rules').select('*').eq('guide_id', guideId).execute() as any;
+      const { data: rules } = await db.from('style_guide_rules').select('*').eq('guide_id', guideId) as any;
       if (rules?.length > 0) {
         const clonedRules = rules.map((r: any) => ({
           guide_id: newVersion.id,
@@ -87,7 +87,7 @@ class StyleGuideService {
           rule_text: r.rule_text,
           is_active: r.is_active
         }));
-        await db.from('style_guide_rules').insert(clonedRules).execute();
+        await db.from('style_guide_rules').insert(clonedRules);
       }
 
       return newVersion;
@@ -99,7 +99,7 @@ class StyleGuideService {
   }
 
   async publishGuide(guideId: string) {
-    return await db.from('style_guides').update({ is_published: true }).eq('id', guideId).execute();
+    return await db.from('style_guides').update({ is_published: true }).eq('id', guideId);
   }
 
   async ingestFromSource(guideId: string) {
@@ -145,7 +145,7 @@ class StyleGuideService {
     }));
 
     if (ruleEntries.length > 0) {
-      await db.from('style_guide_rules').insert(ruleEntries).execute();
+      await db.from('style_guide_rules').insert(ruleEntries);
       appCache.delete(`rules:${guideId}`);
     }
 

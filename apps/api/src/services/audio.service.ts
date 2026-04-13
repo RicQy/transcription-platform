@@ -2,7 +2,7 @@ import { db } from '../db.js';
 
 class AudioService {
   async getFiles() {
-    const { data } = await db.from('audio_files').select('*').execute() as any;
+    const { data } = await db.from('audio_files').select('*') as any;
     return data;
   }
 

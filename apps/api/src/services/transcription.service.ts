@@ -9,7 +9,7 @@ class TranscriptionService {
 
     const io = getSocket();
     io.emit(`audio:${audioFileId}:status`, { status: 'TRANSCRIPTION_QUEUED' });
-    await db.from('audio_files').update({ transcription_status: 'processing' }).eq('id', audioFileId).execute();
+    await db.from('audio_files').update({ transcription_status: 'processing' }).eq('id', audioFileId);
 
     // Add to BullMQ
     await transcriptionQueue.add(`transcribe-${audioFileId}`, {
@@ -27,7 +27,7 @@ class TranscriptionService {
   }
 
   async updateTranscript(id: string, body: any) {
-    const { data: transcript } = await db.from('transcripts').update(body).eq('id', id).execute() as any;
+    const { data: transcript } = await db.from('transcripts').update(body).eq('id', id) as any;
     return transcript;
   }
 }

@@ -43,7 +43,7 @@ export const transcriptionWorker = new Worker('transcription', async (job: Job) 
     const { data: activeGuide } = await db.from('style_guides').select('id').eq('is_active', true).single() as any;
     let finalOutput = rawText;
     if (activeGuide) {
-      const { data: rules } = await db.from('style_guide_rules').select('*').eq('guide_id', activeGuide.id).execute() as any;
+      const { data: rules } = await db.from('style_guide_rules').select('*').eq('guide_id', activeGuide.id) as any;
       if (rules?.length > 0) {
         io.emit(`audio:${audioFileId}:styling`, { status: 'applying_rules' });
         finalOutput = await applyStyleGuideDirect(rawText, rules);
@@ -54,7 +54,7 @@ export const transcriptionWorker = new Worker('transcription', async (job: Job) 
     const { data: mappings } = await db.from('audio_file_speakers')
       .select('*')
       .eq('audio_file_id', audioFileId)
-      .execute() as any;
+       as any;
 
     if (mappings?.length > 0) {
       mappings.forEach((m: any) => {
@@ -80,7 +80,7 @@ export const transcriptionWorker = new Worker('transcription', async (job: Job) 
       completed_at: new Date().toISOString()
     }]).select().single() as any;
 
-    await db.from('audio_files').update({ transcription_status: 'completed' }).eq('id', audioFileId).execute();
+    await db.from('audio_files').update({ transcription_status: 'completed' }).eq('id', audioFileId);
     io.emit(`audio:${audioFileId}:finished`, { text: cvlResult.text });
 
     console.log(`[Worker] Finished job ${job.id}`);
