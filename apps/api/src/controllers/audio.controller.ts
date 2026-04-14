@@ -2,14 +2,17 @@ import { Request, Response } from 'express';
 import { audioService } from '../services/audio.service.js';
 import { storageService } from '../lib/storage.js';
 import { v4 as uuidv4 } from 'uuid';
+import { ServiceError } from '../errors/service-error.js';
 
 class AudioController {
   async getFiles(req: Request, res: Response) {
     try {
       const files = await audioService.getFiles();
       res.json(files);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -21,8 +24,10 @@ class AudioController {
       const key = `audio/${uuidv4()}-${filename}`;
       const uploadUrl = await storageService.getPreSignedUploadUrl(key, contentType);
       res.json({ uploadUrl, key });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -35,8 +40,10 @@ class AudioController {
     try {
       const audioFile = await audioService.saveFile(req.file.originalname, storage_url, req.user.id);
       res.json(audioFile);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -48,8 +55,10 @@ class AudioController {
       const storage_url = storageService.getPublicUrl(key);
       const audioFile = await audioService.saveFile(filename, storage_url, req.user.id, key);
       res.json(audioFile);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 }

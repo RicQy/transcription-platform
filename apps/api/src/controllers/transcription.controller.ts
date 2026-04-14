@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { transcriptionService } from '../services/transcription.service.js';
+import { ServiceError } from '../errors/service-error.js';
 
 class TranscriptionController {
   async transcribe(req: Request, res: Response) {
@@ -9,8 +10,10 @@ class TranscriptionController {
     try {
       const result = await transcriptionService.transcribe(audioFileId, provider);
       res.status(202).json(result);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -19,8 +22,10 @@ class TranscriptionController {
     try {
       const transcript = await transcriptionService.getTranscript(audioFileId);
       res.json(transcript);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -29,8 +34,10 @@ class TranscriptionController {
     try {
       const transcript = await transcriptionService.updateTranscript(id, req.body);
       res.json(transcript);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 }
