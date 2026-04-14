@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { styleGuideService } from '../services/style-guide.service.js';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import fs from 'fs';
+import { ServiceError } from '../errors/service-error.js';
 
 const s3 = new S3Client({
   region: 'auto',
@@ -17,8 +18,10 @@ class StyleGuideController {
     try {
       const guides = await styleGuideService.getGuides();
       res.json(guides);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -45,9 +48,11 @@ class StyleGuideController {
       // Cleanup local file
       fs.unlinkSync(req.file.path);
       
-      res.json(guide);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(201).json(guide);
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 
@@ -56,8 +61,10 @@ class StyleGuideController {
     try {
       const result = await styleGuideService.ingestFromSource(id);
       res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      const status = err instanceof ServiceError ? err.statusCode : 500;
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(status).json({ error: message });
     }
   }
 }
