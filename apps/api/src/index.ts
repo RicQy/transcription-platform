@@ -16,6 +16,7 @@ import transcriptionRoutes from './routes/transcription.routes.js';
 import styleGuideRoutes from './routes/style-guide.routes.js';
 import speakerRoutes from './routes/speaker.routes.js';
 import evaluationRoutes from './routes/evaluation.routes.js';
+import { authenticate } from './middleware/auth.middleware.js';
 import './workers/transcription.worker.js';
 
 dotenv.config();
@@ -35,7 +36,15 @@ initSocket(server);
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for easier local dev if needed, or configure strictly
 }));
-app.use(cors());
+
+const ALLOWED_ORIGINS = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',')
+  : ['http://localhost:5173'];
+
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  credentials: true,
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(morgan('dev'));
 
@@ -49,8 +58,8 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Static files
-app.use('/uploads', express.static(uploadDir));
+// Static files — require authentication to access uploaded files
+app.use('/uploads', authenticate, express.static(uploadDir));
 
 // Routes
 app.use('/auth', authRoutes);

@@ -15,6 +15,10 @@ coverage/
 *.tsbuildinfo
 .turbo/
 
+# Sensitive files — never commit credentials
+login details/
+credentials*
+
 # InsForge & AI agent skills
 .insforge
 .agent

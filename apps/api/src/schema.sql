@@ -82,8 +82,9 @@ CREATE TABLE IF NOT EXISTS evaluations (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed an admin user (Password: MyPassword123, pre-hashed using something simple or just a placeholder)
--- In production, please use bcrypt/argon2 hashing.
+-- Seed an admin user (use bcrypt/argon2 hashing for the password)
+-- IMPORTANT: Replace the placeholder hash below with a real bcrypt hash before running.
+-- Generate one with: node -e "require('bcrypt').hash('YOUR_PASSWORD',10).then(h=>console.log(h))"
 INSERT INTO users (email, password_hash, role) 
-VALUES ('admin@legal.app', '$2b$10$7...placeholder...', 'admin')
+VALUES ('admin@legal.app', '$2b$10$REPLACE_WITH_REAL_BCRYPT_HASH', 'admin')
 ON CONFLICT DO NOTHING;
